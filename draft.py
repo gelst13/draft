@@ -1,97 +1,143 @@
 # $Coffee Machine
-"""functionality that simulates a real coffee machine"""
+"""functionality that simulates a real coffee machine
+
+Stage 4/6. Possible operations are:
+1)sell coffee (offer to buy one cup of coffee)
+2)fill the supplies (coffee machine must get replenished)
+3)take out money from the coffee machine
+"""
+import logging
+
+
+logging.basicConfig(filename='coffee-machine.log', level=logging.DEBUG, filemode='a',
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+# logging.debug('DEBUG message')
+# logging.info('INFO message')
+# logging.warning('WARNING message')
+# logging.error('ERROR message')
+# logging.critical('CRITICAL message')
+
+
+class WrongCommandError(Exception):
+    def __str__(self):
+        return "Unknown command!"
 
 
 class CoffeeMachine:
-    """Creation of the CoffeeMachine object and related functionality."""
-    
-    ingredients_per_cup = {'water': 200, 'milk': 50, 'coffee beans': 15}
     n_ph = 0
     
     def __init__(self):
         """The initializer of the class.
 
         Arguments:
-        available - {'water': _, 'milk': _, 'coffee beans': _}
+        initial_store: dict
+        current_store: dict
         """
-        # self.ingredients = CoffeeMachine.ingredient_calculator()
-        self.ingredients = None
-        self.available = CoffeeMachine.request_amounts()  # stock of ingredients
-        self.cups_needed = CoffeeMachine.request_cups_num()
-    
+        self.initial_store = {'money': 550, 'water': 400, 'milk': 540, 'coffee beans': 120, 'cups': 9}
+        self.current_store = self.initial_store
+   
     def __new__(cls, *args, **kwargs):
         if cls.n_ph == 0:
             cls.n_ph += 1
             return object.__new__(cls)
         return None
-    
+
     def __repr__(self):
         return f'CoffeeMachine object with:\n' \
-               f'stock of ingredients: {self.available}\n'
-    
+               f'initial stock: {self.initial_store}\n'
+
     def __str__(self):
         return self.__repr__()
     
-    @staticmethod
-    def print_process():
-        file_name = 'process.txt'
-        # file_name = r'C:\Users\Тоша\PycharmProjects\Coffee Machine\Coffee Machine\task\machine\process.txt'
-        with open(file_name, 'r') as f:
-            for line in f:
-                print(line.strip('\n'))
-    
-    def ingredient_calculator(self):
-        """for stage 2/6"""
-        quantity = self.cups_needed  # the numbers of coffee drinks
-        # ingredients_per_cup = {'water': 200, 'milk': 50, 'coffee beans': 15}
-        result = {'cups': quantity}
-        for key, value in CoffeeMachine.ingredients_per_cup.items():
-            result.update({key: CoffeeMachine.ingredients_per_cup[key] * quantity})
-        return result
-    
-    def print_needed_supplies(self):
-        """for stage 2/6"""
-        print(self.ingredients)
-        keys_ = list(self.ingredients.keys())
-        print(f'For {self.ingredients[keys_[0]]} cups of coffee you will need:',
-              f'{self.ingredients[keys_[1]]} ml of water',
-              f'{self.ingredients[keys_[2]]} ml of milk',
-              f'{self.ingredients[keys_[3]]} g of coffee beans', sep='\n')
+    def calculate_store(self, data: dict) -> dict:
+        """Take dict with data about sales or added supplies"""
+        current_result = {'money': 0, 'water': 0, 'milk': 0, 'coffee beans': 0, 'cups': 0}
+        for key in list(self.initial_store.keys()):
+            current_result[key] = self.initial_store[key] - data[key]
+        return current_result
     
     @staticmethod
-    def request_amounts():
-        """Request the amounts of water, milk, and coffee beans available at the moment."""
-        result = dict()
-        print('Write how many ml of water the coffee machine has:')
-        result['water'] = int(input())
-        print('Write how many ml of milk the coffee machine has:')
-        result['milk'] = int(input())
-        print('Write how many grams of coffee beans the coffee machine has:')
-        result['coffee beans'] = int(input())
-        return result
+    def print_status(dict_):
+        """Print initial or current stock"""
+        print('The coffee machine has:')
+        print(f'{dict_["water"]} ml of water',
+              f'{dict_["milk"]} ml of milk',
+              f'{dict_["coffee beans"]} g of coffee beans',
+              f'{dict_["cups"]} disposable cups',
+              f'${dict_["money"]} of money',
+              sep='\n')
     
-    @staticmethod
-    def request_cups_num():
-        """Ask for the number of cups a user needs."""
-        print('Write how many cups of coffee you will need:')
-        return int(input())
-    
-    def calculator(self):
-        """for stage 3/6"""
-        # self.cups_needed  # the numbers of coffee drinks
-        calc = []
-        for key in self.available.keys():
-            calc.append(self.available[key] // CoffeeMachine.ingredients_per_cup[key])
-        cups_possible = min(calc)
-        if cups_possible == self.cups_needed:
-            print('Yes, I can make that amount of coffee')
-        elif cups_possible > self.cups_needed:
-            n = cups_possible - self.cups_needed
-            print(f'Yes, I can make that amount of coffee (and even {n} more than that)')
+    def machine_menu(self):
+        CoffeeMachine.print_status(self.initial_store)
+        print()
+        action = input('Write action (buy, fill, take):\n')
+        if action == 'buy':
+            logging.debug('action == buy')
+            sales = CoffeeMachine.sell()
+            self.current_store = CoffeeMachine.calculate_store(self, sales)
+        elif action == 'fill':
+            logging.debug('action == fill')
+            added_supplies = CoffeeMachine.fill()
+            self.current_store = CoffeeMachine.calculate_store(self, added_supplies)
+        elif action == 'take':
+            # give all the money
+            logging.debug('action == take')
+            print(f'I gave you ${self.initial_store["money"]}')
+            self.current_store.update({'money': 0})
         else:
-            print(f'No, I can make only {cups_possible} cups of coffee')
+            raise WrongCommandError
+        print()
+        CoffeeMachine.print_status(self.current_store)
+    
+    @staticmethod
+    def choose_coffee() -> str:
+        """Return coffee_chosen: espresso, latte, cappuccino"""
+        coffee_types = {'1': 'espresso', '2': 'latte', '3': 'cappuccino'}
+        coffee_chosen = input('What do you want to buy? 1 - espresso, 2 - latte, 3 - cappuccino:\n')
+        if coffee_chosen in coffee_types.keys():
+            return coffee_types[coffee_chosen]
+        else:
+            raise WrongCommandError
+    
+    @staticmethod
+    def sell() -> dict:
+        """User must choose one of three types of coffee"""
+        sales = {'money': 0, 'water': 0, 'milk': 0, 'coffee beans': 0, 'cups': 0}
+        recipes = {'espresso': {'water': 250, 'milk': 0, 'coffee beans': 16, 'price': 4},
+                   'latte': {'water': 350, 'milk': 75, 'coffee beans': 20, 'price': 7},
+                   'cappuccino': {'water': 200, 'milk': 100, 'coffee beans': 12, 'price': 6},
+                   }
+        # Ask user:
+        coffee = CoffeeMachine.choose_coffee()
+        sales['money'] += (-recipes[coffee]['price'])
+        sales['water'] += recipes[coffee]['water']
+        sales['milk'] += recipes[coffee]['milk']
+        sales['coffee beans'] += recipes[coffee]['coffee beans']
+        sales['cups'] += 1
+        return sales
+    
+    @staticmethod
+    def fill() -> dict:
+        """Replenish supplies."""
+        supplies = {'money': 0}
+        print('Write how many ml of water you want to add:')
+        supplies['water'] = -int(input())
+        print('Write how many ml of milk you want to add:')
+        supplies['milk'] = -int(input())
+        print('Write how many grams of coffee beans you want to add:')
+        supplies['coffee beans'] = -int(input())
+        print('Write how many disposable cups of coffee you want to add:')
+        supplies['cups'] = -int(input())
+        return supplies
 
 
-new_order = CoffeeMachine()
-# new_order.print_needed_supplies()
-new_order.calculator()
+def main():
+    try:
+        new_operation = CoffeeMachine()
+        CoffeeMachine.machine_menu(new_operation)
+    except WrongCommandError as err:
+        logging.error(err)
+
+
+if __name__ == '__main__':
+    main()
