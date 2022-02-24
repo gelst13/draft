@@ -1,10 +1,11 @@
 # $Coffee Machine
 """functionality that simulates a real coffee machine
 
-Stage 4/6. Possible operations are:
-1)sell coffee (offer to buy one cup of coffee)
-2)fill the supplies (coffee machine must get replenished)
-3)take out money from the coffee machine
+Stage 5/6. Possible operations are: buy, fill, take, remaining, exit.
+If the coffee machine doesn't have enough resources to make coffee,
+the program should output 'can't make a cup of coffee' and what is missing.
+if the user types "buy"  and then changes his mind
+he can type "back" to return into the main cycle.
 """
 import logging
 
@@ -49,15 +50,15 @@ class CoffeeMachine:
     def __str__(self):
         return self.__repr__()
     
-    def calculate_store(self, data: dict) -> dict:
+    def calculate_store(self, data: 'dict with data about sales or added supplies') -> dict:
         """Take dict with data about sales or added supplies"""
         current_result = {'money': 0, 'water': 0, 'milk': 0, 'coffee beans': 0, 'cups': 0}
-        for key in list(self.initial_store.keys()):
-            current_result[key] = self.initial_store[key] - data[key]
+        for key in list(self.current_store.keys()):
+            current_result[key] = self.current_store[key] - data[key]
         return current_result
     
     @staticmethod
-    def print_status(dict_):
+    def print_status(dict_: 'initial_store or current_store'):
         """Print initial or current stock"""
         print('The coffee machine has:')
         print(f'{dict_["water"]} ml of water',
@@ -68,66 +69,109 @@ class CoffeeMachine:
               sep='\n')
     
     def machine_menu(self):
-        CoffeeMachine.print_status(self.initial_store)
-        print()
-        action = input('Write action (buy, fill, take):\n')
-        if action == 'buy':
-            logging.debug('action == buy')
-            sales = CoffeeMachine.sell()
-            self.current_store = CoffeeMachine.calculate_store(self, sales)
-        elif action == 'fill':
-            logging.debug('action == fill')
-            added_supplies = CoffeeMachine.fill()
-            self.current_store = CoffeeMachine.calculate_store(self, added_supplies)
-        elif action == 'take':
-            # give all the money
-            logging.debug('action == take')
-            print(f'I gave you ${self.initial_store["money"]}')
-            self.current_store.update({'money': 0})
-        else:
-            raise WrongCommandError
-        print()
-        CoffeeMachine.print_status(self.current_store)
+        while True:
+            action = input('Write action (buy, fill, take, remaining, exit):\n')
+            
+            if action == 'buy':
+                print()
+                logging.debug('action == buy')
+                # ASK USER
+                user_answer = CoffeeMachine.choose_coffee()
+                # when user types 'back', CoffeeMachine.choose_coffee() return empty dict
+                if user_answer == dict():
+                    # let's go back to machine menu
+                    CoffeeMachine.machine_menu(self)
+                else:
+                    sales = CoffeeMachine.sell(self, user_answer)
+                    self.current_store = CoffeeMachine.calculate_store(self, sales)
+                    print()
+            elif action == 'fill':
+                print()
+                logging.debug('action == fill')
+                added_supplies = CoffeeMachine.fill()
+                self.current_store = CoffeeMachine.calculate_store(self, added_supplies)
+                print()
+            elif action == 'take':
+                # give all the money
+                print()
+                logging.debug('action == take')
+                print(f'I gave you ${self.current_store["money"]}')
+                self.current_store.update({'money': 0})
+                print()
+            elif action == 'remaining':
+                print()
+                CoffeeMachine.print_status(self.current_store)
+                print()
+            elif action == 'exit':
+                exit()
+            else:
+                raise WrongCommandError
+        
+        # CoffeeMachine.print_status(self.current_store)
     
     @staticmethod
-    def choose_coffee() -> str:
-        """Return coffee_chosen: espresso, latte, cappuccino"""
-        coffee_types = {'1': 'espresso', '2': 'latte', '3': 'cappuccino'}
-        coffee_chosen = input('What do you want to buy? 1 - espresso, 2 - latte, 3 - cappuccino:\n')
-        if coffee_chosen in coffee_types.keys():
-            return coffee_types[coffee_chosen]
-        else:
-            raise WrongCommandError
-    
-    @staticmethod
-    def sell() -> dict:
-        """User must choose one of three types of coffee"""
-        sales = {'money': 0, 'water': 0, 'milk': 0, 'coffee beans': 0, 'cups': 0}
+    def choose_coffee() -> dict:
+        """Return coffee_chosen as dict."""
         recipes = {'espresso': {'water': 250, 'milk': 0, 'coffee beans': 16, 'price': 4},
                    'latte': {'water': 350, 'milk': 75, 'coffee beans': 20, 'price': 7},
                    'cappuccino': {'water': 200, 'milk': 100, 'coffee beans': 12, 'price': 6},
                    }
-        # Ask user:
-        coffee = CoffeeMachine.choose_coffee()
-        sales['money'] += (-recipes[coffee]['price'])
-        sales['water'] += recipes[coffee]['water']
-        sales['milk'] += recipes[coffee]['milk']
-        sales['coffee beans'] += recipes[coffee]['coffee beans']
-        sales['cups'] += 1
-        return sales
+        coffee_types = {'1': 'espresso', '2': 'latte', '3': 'cappuccino'}
+        coffee_chosen = input('What do you want to buy? 1 - espresso, 2 - latte, 3 - cappuccino:\n')
+        if coffee_chosen in coffee_types.keys():
+            return recipes[coffee_types[coffee_chosen]]
+        elif coffee_chosen == 'back':
+            logging.debug('coffee_chosen == back')
+            return dict()
+        else:
+            raise WrongCommandError
+    
+    def resources_not_enough(self, recipe):
+        # recipe = {'water': 250, 'milk': 0, 'coffee beans': 16, 'price': 4}
+        for key, value in self.current_store.items():
+            try:
+            
+                if key == 'cups' and value == 0:
+                    print(f'Sorry, not enough {key}!')
+                    return True
+                elif value < recipe[key]:
+                    print(f'Sorry, not enough {key}!')
+                    return True
+                # else:
+                #     continue
+            except KeyError:
+                continue
+    
+    def sell(self, coffee) -> 'sales dict':
+        """User must choose one of three types of coffee"""
+        sales = {'money': 0, 'water': 0, 'milk': 0, 'coffee beans': 0, 'cups': 0}
+        coffee_possible = CoffeeMachine.resources_not_enough(self, coffee)
+        if coffee_possible:
+            return sales
+        else:
+            print('I have enough resources, making you a coffee!')
+            sales['money'] += (-coffee['price'])
+            sales['water'] += coffee['water']
+            sales['milk'] += coffee['milk']
+            sales['coffee beans'] += coffee['coffee beans']
+            sales['cups'] += 1
+            return sales
+
+    fill_commands = {
+        'water': 'Write how many ml of water do you want to add:',
+        'milk': 'Write how many ml of milk do you want to add:',
+        'coffee beans': 'Write how many grams of coffee beans do you want to add:',
+        'cups': 'Write how many disposable cups of coffee do you want to add',
+    }
     
     @staticmethod
-    def fill() -> dict:
+    def fill() -> 'added supplies dict':
         """Replenish supplies."""
+        
         supplies = {'money': 0}
-        print('Write how many ml of water you want to add:')
-        supplies['water'] = -int(input())
-        print('Write how many ml of milk you want to add:')
-        supplies['milk'] = -int(input())
-        print('Write how many grams of coffee beans you want to add:')
-        supplies['coffee beans'] = -int(input())
-        print('Write how many disposable cups of coffee you want to add:')
-        supplies['cups'] = -int(input())
+        for key in list(CoffeeMachine.fill_commands.keys()):
+            print(CoffeeMachine.fill_commands[key])
+            supplies.update({key: -int(input())})
         return supplies
 
 
