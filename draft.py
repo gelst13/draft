@@ -24,6 +24,9 @@ the program still should work (like Java or Python REPL).
 14        -  12
 two adjacent minus signs turn into a plus.
 /help command: maintain its relevance depending on the changes (in the next stages too).
+stage 5/7
+The program only knows numbers, a plus sign, a minus sign, and two commands.
+It cannot accept all other characters
 """
 
 
@@ -52,15 +55,27 @@ def terminate():
 def main():
     while True:
         user_input = input()
+        if user_input in (' ', ''):
+            main()
         try:
             print(eval(user_input))
-        
+        except NameError:
+            print('Invalid expression')
+            main()
         except SyntaxError:
             if user_input == '/exit':
                 terminate()
             elif user_input == '/help':
-                print('The program calculates eny expressions '
-                      'with the addition + and subtraction - operators')
+                print('The program only knows numbers, a plus sign, a minus sign, and two commands:'
+                      '/help, /exit. It cannot accept any other characters.')
+                main()
+            elif user_input[0] == '/':
+                print('Unknown command')
+                main()
+            elif user_input in (' ', ''):
+                main()
+            else:
+                print('Invalid expression')
                 main()
 
 
