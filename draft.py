@@ -2,12 +2,14 @@
 """
 stage 6/7
 I decided to replace subtraction by adding negative value
-implemented regex fro parsing:
+implemented regex for parsing:
 1) expression of type 'assignment ='
 2) expressions with operators + -
 """
 import logging
 import re
+from collections import deque
+
 
 logging.basicConfig(filename='my_calc.log', level=logging.DEBUG, filemode='a',
                     format='%(levelname)s - %(message)s')
@@ -43,7 +45,8 @@ class Calculator:
         # self.second = second
         # self.numbers = numbers
         self.variables = dict()
-        self.expression = list()
+        self.expression = None
+        self.postfix = ''
     
     
     def process_assignment(self, expr: str) -> dict:
@@ -130,7 +133,42 @@ class Calculator:
                 del self.expression[i]
             elif char == '+' or char == '++':
                 del self.expression[i]
-
+    
+    @staticmethod
+    def process_plus(expr: str):
+        expr_new = ''
+        i = 0
+        while i < len(expr):
+            if expr[i] == '+':
+                expr_new += '+'
+                parse = re.match('["+"]+', expr[i:])
+                if parse:
+                    end_i = i + parse.end()
+                    i = end_i
+            else:
+                expr_new += expr[i]
+                i += 1
+        return expr_new
+    
+    @staticmethod
+    def process_minus(expr: str):
+        expr_new = ''
+        i = 0
+        while i < len(expr):
+            if expr[i] == '-':
+                parse = re.match('[-]+', expr[i:])
+                if parse:
+                    if len(parse[0]) % 2 == 0:
+                        expr_new += '+'
+                    else:
+                        expr_new += '-'
+                    end_i = i + parse.end()
+                    i = end_i
+            else:
+                expr_new += expr[i]
+                i += 1
+        return expr_new
+    
     def add(self, expr: str) -> int:
         """Cast taken expr to list, save it in self.expression
         process(change) self.expression."""
@@ -159,6 +197,101 @@ class Calculator:
     def help():
         print('The program knows two commands: /help, /exit.'
               'It supports variables(storing them in a dict), addition, and subtraction.')
+    
+    @staticmethod
+    def polish_postfix_notation(expression_: str) -> list:
+        priority = {'+': 0, '-': 0, '*': 1, '/': 1, }
+        my_stack = deque()
+        postfix_notation = []
+        parse = re.findall(r'([\-+*/()]|\w+|[^\s\w\-+]+)', expression_)
+        logging.debug(f'parse={parse}')
+        try:
+            for char in parse:
+                # Add operands (numbers and variables) to the result (postfix notation)
+                logging.debug(f"char: {char}")
+                if char not in '/+-*()':  # char is operand
+                    postfix_notation.append(char)
+                    logging.debug(postfix_notation)
+                else:  # char is operator or ()
+                    if char == '(':  # 4
+                        logging.info("# 4")
+                        my_stack.append(char)
+                        logging.debug(f" 49 {my_stack}")
+                    elif char == ')':  # 5
+                        logging.info("# 5")
+                        while my_stack:
+                            r = my_stack.pop()
+                            logging.debug(f"r= {r}")
+                            logging.debug(f"56 {my_stack}")
+                            if r != '(':
+                                postfix_notation.append(r)
+                                logging.debug(f"{postfix_notation}")
+                            else:
+                                logging.info("break")
+                                break
+                    elif not my_stack or my_stack[-1] == '(':  # 1
+                        logging.info("# 1")
+                        my_stack.append(char)
+                        logging.debug(f"66  {my_stack}")
+                    elif priority[char] > priority[my_stack[-1]]:  # 2
+                        logging.info("# 2")
+                        my_stack.append(char)
+                        logging.debug(f"70 {my_stack}")
+                    elif priority[char] <= priority[my_stack[-1]]:
+                        logging.info("# 3")
+                        while my_stack:
+                            r = my_stack[-1]
+                            logging.debug(f"r= {r}")
+                            if my_stack[-1] == '(' or priority[char] >= priority[r]:  # 3.1
+                                logging.info("# 3.1")
+                                logging.debug('break')
+                                my_stack.pop()
+                                break
+                            else:  # 3.2
+                                logging.info("# 3.2")
+                                postfix_notation.append(r)
+                                logging.debug(f'83 {postfix_notation}')
+                                my_stack.pop()
+                        my_stack.append(char)
+                        logging.debug(f"87 {my_stack}")
+            logging.debug(f'final stack in postfix: {my_stack}')
+            while my_stack:  # 6
+                logging.info("# 6")
+                postfix_notation.append(my_stack.pop())
+                logging.debug(postfix_notation)
+            if my_stack:
+                raise SyntaxError
+            return postfix_notation
+        except IndexError as err:
+            logging.warning(err)
+            print(err)
+    
+    
+    def calculating_result(self, user_expr: str) -> int:
+        logging.info('executing def calculating_result()...')
+        my_stack = deque()
+        self.expression = self.process_plus(user_expr)
+        logging.debug(self.expression)
+        self.expression = self.process_minus(self.expression)
+        logging.debug(self.expression)
+        expression_ = self.polish_postfix_notation(self.expression)  # list
+        logging.debug(f"postfix notation: {expression_}")
+        for element in expression_:
+            if element.isdigit():
+                my_stack.append(int(element))
+                logging.debug(my_stack)
+            elif element.isalpha():
+                my_stack.append(self.return_value(element))
+                logging.debug(my_stack)
+            else:
+                logging.debug(f'operator = {element}')
+                first = my_stack.pop()
+                second = my_stack.pop()
+                logging.debug(f'{second} {element} {first}')
+                my_stack.append(eval(f'{second} {element} {first}'))
+                logging.debug(my_stack)
+        logging.debug(f'calculating_result: {my_stack[-1]}')
+        return my_stack[-1]
 
 
 def terminate():
@@ -203,10 +336,13 @@ def main():
             elif '=' in user_input:
                 logging.info("detected assignment =")
                 Calculator.assign(new, user_input)
-            elif '+' in user_input or '-' in user_input:
-                logging.info("calculations of different expressions")
-                print(Calculator.add(new, user_input))
+            # elif '+' in user_input or '-' in user_input:
+            #     logging.info("calculations of different expressions")
+            #     print(Calculator.add(new, user_input))
             # if it's variable name
+            elif any([operator in user_input for operator in '+-/*']):
+                logging.info("calculations of different expressions")
+                print(Calculator.calculating_result(new, user_input))
             else:
                 logging.info('ELSE')
                 if user_input[0] == '/':
