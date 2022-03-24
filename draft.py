@@ -1,15 +1,18 @@
 # !/usr/bin/python
 # -*- coding: utf-8
 # $Static Code Analyzer
+import ast
 import logging
 import os
 import re
+import string
 import sys
+from pprint import pprint
 
 logging.basicConfig(filename='bo.log', level=logging.DEBUG, filemode='a',
                     format='%(levelname)s - %(message)s')
 
-logging.disable(20)
+# logging.disable(20)
 
 # os.chdir(r'C:\Users\Тоша\PycharmProjects\Static Code Analyzer\Static Code Analyzer\task')
 # os.chdir(r'C:\Users\Тоша\PycharmProjects\FirstProject')
@@ -32,6 +35,9 @@ class StaticCodeAnalyzer:
                          'S007': "Too many spaces after ' '",
                          'S008': 'Class name class_name should be written in CamelCase',
                          'S009': 'Function name function_name should be written in snake_case',
+                         'S010': 'Argument name \"$name\" should be written in snake_case',
+                         'S011': 'Variable \"$name\" should be written in snake_case',
+                         'S012': 'The default argument value is mutable',
                          }
     
     def get_abs_names(self) -> list:
@@ -144,6 +150,70 @@ class StaticCodeAnalyzer:
         else:
             return 'Not a function'
     
+    @staticmethod
+    def check_snake_case(expr: str):
+        """Test if variable/argument name is written in snake_case"""
+        logging.info('check_snake_case...')
+        check_ = re.match(r'([a-z_][a-z0-9_]+)$', expr)
+        logging.debug(f'check_: {check_}')
+        return bool(check_)
+    
+    @staticmethod
+    def check_immutability(tested_obj):
+        """Check type of tested_obj.
+        Return True if tested_obj is hashable and -> immutable"""
+        # Constants are immutable.
+        # Immutable containers (like tuples) are hashable if their elements are hashable
+        # and -> immutable
+        # frozensets are immutable and hashable.
+        logging.info('check_immutability ...')
+        logging.debug(type(tested_obj))
+        if isinstance(tested_obj, ast.Tuple):
+            if hash(tested_obj.elts):
+                logging.debug('tested_obj is immutable and hashable')
+                return True
+        elif isinstance(tested_obj, ast.Constant):
+            logging.debug('tested_obj is immutable and hashable')
+            return True
+    
+    def check_ast_nodes(self, filename):
+        """find ast.FunctionDef node and analyze that node: make 3 checks"""
+        logging.info('check_ast_nodes...')
+        logging.debug(f'filename: {filename}')
+        with open(filename, 'r', encoding='utf-8') as file:
+            code = file.read()
+            tree = ast.parse(code)
+            lines = [None] + code.splitlines()  # None at [0] so we can index lines from 1
+            for node in tree.body:
+                if isinstance(node, ast.FunctionDef):
+                    logging.info('node: ast.FunctionDef')
+                    function_node = node
+                    self.mistakes[function_node.lineno] = set()
+                    function_name = node.name
+                    logging.debug(f'function_name: {function_name}')
+                    # check for error S010
+                    function_args = [a.arg for a in function_node.args.args]
+                    logging.debug(f'function_args: {function_args}')
+                    for arg in function_args:
+                        if not self.check_snake_case(arg):
+                            self.mistakes[function_node.lineno].add(('S010', arg))
+                    # check for error S011
+                    logging.info(f'FunctionDef {function_name}: ast.Assign')
+                    for obj in function_node.body:
+                        if isinstance(obj, ast.Assign):
+                            self.mistakes[obj.lineno] = set()
+                            var_name = [name.id for name in obj.targets][0]
+                            logging.debug(var_name)
+                            if not self.check_snake_case(var_name):
+                                self.mistakes[obj.lineno].add(('S011', var_name))
+                    # check for error S012
+                    function_args_defaults = [d for d in function_node.args.defaults]
+                    logging.debug(f'args_default: {function_args_defaults}')
+                    for default_value in function_args_defaults:
+                        if not self.check_immutability(default_value):
+                            self.mistakes[function_node.lineno].add(('S012', ))
+    
+    
     def check_file(self, filename):
         logging.info('check_file...')
         logging.debug(f'filename: {filename}')
@@ -184,19 +254,33 @@ class StaticCodeAnalyzer:
         new_m = dict()
         for key, value in self.mistakes.items():
             if value:
-                new_m[key] = sorted(list(set(value)))
+                # new_m[key] = sorted(list(set(value)))
+                new_m[key] = sorted(list(value))
+        logging.debug(new_m)
         return new_m
     
     def print_sorted_results(self, file_):
-        """Line X: Code Message"""
+        """File: Line X: Code Message"""
+        logging.info("print_sorted_results")
         for lineno in sorted(self.mistakes.keys()):
             for error in self.mistakes[lineno]:
                 if error[0] == 'S007':
                     message = f"Too many spaces after '{error[1]}'"
                     print(f'{file_}: Line {lineno}: {error[0]} {message}')
+                elif len(error) == 2:
+                    logging.info('len(error) == 2:')
+                    logging.debug(f'{file_}: Line {lineno}: {error}')
+                    template = string.Template(self.messages[error[0]])
+                    logging.debug(self.messages[error[0]])
+                    logging.debug(template)
+                    msg = template.substitute(name=error[1])
+                    logging.info('template.substitute(name=error[1])')
+                    logging.debug(f'msg: {msg}')
+                    print(f'{file_}: Line {lineno}: {error[0]} {msg}')
                 else:
-                    print(f'{file_}: Line {lineno}: {error} {self.messages[error]}')
-    
+                    print(f'{file_}: Line {lineno}: {error[0]} {self.messages[error[0]]}')
+                    
+
     def start(self) -> None:
         # PREPARATION
         if self.target.endswith('.py'):
@@ -210,11 +294,15 @@ class StaticCodeAnalyzer:
         logging.info('ANALYZING')
         for file in sorted(files):
             # logging.debug(file)
-            self.check_file(file)
+            self.check_ast_nodes(file)
+            pprint(self.mistakes)
+            # self.check_file(file)
             self.process_result()
             self.print_sorted_results(file)
             self.mistakes = dict()
 
+
+"""{1: {('S010', 'S'), 'S012'}, 2: {('S011', 'VARIABLE')}, 3: set()}"""
 
 # TESTING input
 # input_path = 'test\test_1.py'
