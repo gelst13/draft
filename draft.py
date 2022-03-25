@@ -32,7 +32,7 @@ class StaticCodeAnalyzer:
                          'S004': 'Less than two spaces before inline comments',
                          'S005': 'TODO found',
                          'S006': 'More than two blank lines preceding a code line',
-                         'S007': "Too many spaces after ' '",
+                         'S007': "Too many spaces after \"$name\"",
                          'S008': 'Class name class_name should be written in CamelCase',
                          'S009': 'Function name function_name should be written in snake_case',
                          'S010': 'Argument name \"$name\" should be written in snake_case',
@@ -182,36 +182,41 @@ class StaticCodeAnalyzer:
         logging.debug(f'filename: {filename}')
         with open(filename, 'r', encoding='utf-8') as file:
             code = file.read()
-            tree = ast.parse(code)
-            lines = [None] + code.splitlines()  # None at [0] so we can index lines from 1
-            for node in tree.body:
-                if isinstance(node, ast.FunctionDef):
-                    logging.info('node: ast.FunctionDef')
-                    function_node = node
-                    self.mistakes[function_node.lineno] = set()
-                    function_name = node.name
-                    logging.debug(f'function_name: {function_name}')
-                    # check for error S010
-                    function_args = [a.arg for a in function_node.args.args]
-                    logging.debug(f'function_args: {function_args}')
-                    for arg in function_args:
-                        if not self.check_snake_case(arg):
-                            self.mistakes[function_node.lineno].add(('S010', arg))
-                    # check for error S011
-                    logging.info(f'FunctionDef {function_name}: ast.Assign')
-                    for obj in function_node.body:
-                        if isinstance(obj, ast.Assign):
-                            self.mistakes[obj.lineno] = set()
-                            var_name = [name.id for name in obj.targets][0]
-                            logging.debug(var_name)
-                            if not self.check_snake_case(var_name):
-                                self.mistakes[obj.lineno].add(('S011', var_name))
-                    # check for error S012
-                    function_args_defaults = [d for d in function_node.args.defaults]
-                    logging.debug(f'args_default: {function_args_defaults}')
-                    for default_value in function_args_defaults:
-                        if not self.check_immutability(default_value):
-                            self.mistakes[function_node.lineno].add(('S012', ))
+            try:
+                tree = ast.parse(code)
+                # lines = [None] + code.splitlines()  # None at [0] so we can index lines from 1
+                for node in tree.body:
+                    if isinstance(node, ast.FunctionDef):
+                        logging.info('node: ast.FunctionDef')
+                        function_node = node
+                        self.mistakes[function_node.lineno] = set()
+                        function_name = node.name
+                        logging.debug(f'function_name: {function_name}')
+                        # check for error S010
+                        function_args = [a.arg for a in function_node.args.args]
+                        logging.debug(f'function_args: {function_args}')
+                        for arg in function_args:
+                            if not self.check_snake_case(arg):
+                                self.mistakes[function_node.lineno].add(('S010', arg))
+                        # check for error S011
+                        logging.info(f'FunctionDef {function_name}: ast.Assign')
+                        for obj in function_node.body:
+                            if isinstance(obj, ast.Assign):
+                                self.mistakes[obj.lineno] = set()
+                                var_name = [name.id for name in obj.targets][0]
+                                logging.debug(var_name)
+                                if not self.check_snake_case(var_name):
+                                    self.mistakes[obj.lineno].add(('S011', var_name))
+                        # check for error S012
+                        function_args_defaults = [d for d in function_node.args.defaults]
+                        logging.debug(f'args_default: {function_args_defaults}')
+                        for default_value in function_args_defaults:
+                            if not self.check_immutability(default_value):
+                                self.mistakes[function_node.lineno].add(('S012', ))
+            except IndentationError as err:
+                logging.error(err)
+            except SyntaxError as err:
+                logging.error(err)
     
     
     def check_file(self, filename):
@@ -220,24 +225,26 @@ class StaticCodeAnalyzer:
         with open(filename, 'r', encoding='utf-8') as file:
             empty_line_count = 0
             for number, line in enumerate(file):
-                self.mistakes[number + 1] = []
+                # try:
+                if (number + 1) not in self.mistakes.keys():
+                    self.mistakes[number + 1] = set()
+                # self.mistakes[number + 1] = []
                 if self.check_s001(line):
-                    self.mistakes[number + 1].append('S001')
+                    self.mistakes[number + 1].add(('S001', ))
                 if self.check_s002(line) == 'Not Ok':
-                    self.mistakes[number + 1].append('S002')
+                    self.mistakes[number + 1].add(('S002', ))
                 if self.check_s003(line):
-                    # logging.debug(number + 1)
-                    self.mistakes[number + 1].append('S003')
+                    self.mistakes[number + 1].add(('S003', ))
                 if self.check_s004(line):
-                    self.mistakes[number + 1].append('S004')
+                    self.mistakes[number + 1].add(('S004', ))
                 if self.check_s005(line):
-                    self.mistakes[number + 1].append('S005')
+                    self.mistakes[number + 1].add(('S005', ))
                 if self.check_s007(line):
-                    self.mistakes[number + 1].append(('S007', self.check_s007(line)))
+                    self.mistakes[number + 1].add(('S007', self.check_s007(line)))
                 if not self.check_s008(line):
-                    self.mistakes[number + 1].append('S008')
+                    self.mistakes[number + 1].add(('S008', ))
                 if not self.check_s009(line):
-                    self.mistakes[number + 1].append('S009')
+                    self.mistakes[number + 1].add(('S009', ))
                 # check_s006
                 if line == '\n':
                     # logging.warning(r"line == '\n'")
@@ -246,9 +253,13 @@ class StaticCodeAnalyzer:
                 else:
                     if empty_line_count > 2:
                         # logging.warning(f'empty_line_count: {empty_line_count}')
-                        self.mistakes[number + 1].append('S006')
+                        self.mistakes[number + 1].add(('S006', ))
                     empty_line_count = 0
                     # logging.warning(f'empty_line_count: {empty_line_count}')
+                    # except KeyError as err:
+                    #     logging.warning(err)
+                    #     self.mistakes[number + 1] = set()
+                    #     continue
     
     def process_result(self):
         new_m = dict()
@@ -264,10 +275,7 @@ class StaticCodeAnalyzer:
         logging.info("print_sorted_results")
         for lineno in sorted(self.mistakes.keys()):
             for error in self.mistakes[lineno]:
-                if error[0] == 'S007':
-                    message = f"Too many spaces after '{error[1]}'"
-                    print(f'{file_}: Line {lineno}: {error[0]} {message}')
-                elif len(error) == 2:
+                if len(error) == 2:
                     logging.info('len(error) == 2:')
                     logging.debug(f'{file_}: Line {lineno}: {error}')
                     template = string.Template(self.messages[error[0]])
@@ -294,15 +302,13 @@ class StaticCodeAnalyzer:
         logging.info('ANALYZING')
         for file in sorted(files):
             # logging.debug(file)
+            self.check_file(file)
             self.check_ast_nodes(file)
-            pprint(self.mistakes)
-            # self.check_file(file)
-            self.process_result()
+            self.mistakes = self.process_result()
+            # pprint(self.mistakes)
             self.print_sorted_results(file)
             self.mistakes = dict()
 
-
-"""{1: {('S010', 'S'), 'S012'}, 2: {('S011', 'VARIABLE')}, 3: set()}"""
 
 # TESTING input
 # input_path = 'test\test_1.py'
