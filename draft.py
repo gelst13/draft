@@ -1,6 +1,6 @@
 # !/usr/bin/python
 # -*- coding: utf-8
-# $Text-Based Browser 4/6
+# $Text-Based Browser 4/4
 """
 
 """
@@ -29,13 +29,7 @@ class UnacceptableUrl(Exception):
         return self.__repr__()
 
 
-nytimes_com = ''''''
-
-bloomberg_com = ''''''
-
-
 class Browser:
-    global nytimes_com, bloomberg_com
     browser_stack = deque()
     
     def __init__(self, directory):
@@ -43,9 +37,7 @@ class Browser:
         self.url = None
         self.r = None
         self.directory = directory
-        self.data = {'nytimes.com': nytimes_com,
-                     'bloomberg.com': bloomberg_com,
-                     }
+
     
     def check_url(self):
         logging.info("checking self.command if it's a valid URL")
@@ -93,11 +85,11 @@ class Browser:
             logging.debug(f'user_input: {self.command}')
             if self.command == 'exit':
                 exit()
-            elif self.command in ('nytimes', 'bloomberg'):
-                # if the string corresponds to the name of any file with a web page you saved before
-                with open(f'{self.directory}/{self.command}', 'r', encoding='utf-8') as f:
-                    for line in f:
-                        print(line)
+            # elif self.command in ('nytimes', 'bloomberg'):
+            #     # if the string corresponds to the name of any file with a web page you saved before
+            #     with open(f'{self.directory}/{self.command}', 'r', encoding='utf-8') as f:
+            #         for line in f:
+            #             print(line)
             elif self.command == 'back' and len(Browser.browser_stack) < 2:
                 pass
             elif self.command == 'back':
@@ -133,4 +125,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
