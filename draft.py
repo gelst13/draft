@@ -1,13 +1,13 @@
-# !/usr/bin/python
-# -*- coding: utf-8
-# $Text-Based Browser 4/4
+# $Text-Based Browser 5/6
 """
 
 """
 import logging
 import os
+import re
 import requests
 import sys
+from bs4 import BeautifulSoup
 from collections import deque
 
 logging.basicConfig(filename='bo.log', level=logging.DEBUG, filemode='a',
@@ -31,13 +31,15 @@ class UnacceptableUrl(Exception):
 
 class Browser:
     browser_stack = deque()
+    tag_list = ['p', 'a', 'ul', 'ol', 'li']
     
     def __init__(self, directory):
         self.command = ''
         self.url = None
         self.r = None
+        self.readable_text = list()
         self.directory = directory
-
+        self.session = requests.Session()
     
     def check_url(self):
         logging.info("checking self.command if it's a valid URL")
@@ -45,43 +47,52 @@ class Browser:
             raise InvalidUrl
     
     def connect(self):
+        """Check connection: request' status code"""
         try:
-            headers = {'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.5'}
-            self.r = requests.get('https://' + self.url, headers=headers)
+            logging.info('connecting ...')
             logging.debug('https://' + self.url)
-            logging.debug(self.r.status_code)
-            if self.r.status_code == 200:
+            headers = {'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.5'}
+            response = self.session.get('https://' + self.url, headers=headers)
+            if response.status_code == 200:
+                logging.debug(response.status_code)
+                self.r = response
                 return 1
         except requests.exceptions.RequestException:
             logging.info('No connection!')
+            logging.error(response.status_code)
     
     def request(self):  # Create response-object and save it to self.r
-        # Check Status
         if Browser.connect(self) == 1:
-            # Getting the webpage with results of translation
-            headers = {'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.5'}
-            self.r = requests.get('https://' + self.url, headers=headers)
+            soup = BeautifulSoup(self.r.content, 'html.parser')
+            for tag in Browser.tag_list:
+                for result in soup.find_all(tag):
+                    self.readable_text.append(result.text)
             self.save_website()
     
-    def print_saved_webpage(self, filename):
-        with open(f'{self.directory}/{filename}', 'r', encoding='utf-8') as f:
+    def get_filename(self):
+        domain = re.search('[.a-z]{3,4}$', self.url)
+        return self.url[:domain.start()]
+    
+    def print_saved_webpage(self):
+        logging.debug(f'printing {self.url} ...')
+        with open(f'{self.directory}/{self.get_filename()}', 'r', encoding='utf-8') as f:
             print(f.read())
-            # for line in f:
-            #     print(line)
     
     def save_website(self):
         Browser.browser_stack.append(self.url)
         logging.debug(f'current page is:    https://www.{self.url} ')
-        with open(f"{self.directory}/{self.url}", 'w', encoding='utf-8') as file:
-            website_content = self.r.content.decode("utf-8")
-            file.write(website_content)
-        logging.debug(os.listdir(self.directory))
-        
+        with open(f"{self.directory}/{self.get_filename()}", 'w', encoding='utf-8') as file:
+            for line in self.readable_text:
+                if line != '\n':
+                    file.write(line + '\n')
+        logging.debug('The website is successfully saved.')
+        logging.debug(f'contents of {self.directory}: {os.listdir(self.directory)}')
     
     def start(self):
         logging.info('start...')
+        self.command = 'docs.python.org'
         while True:
-            self.command = input()
+            # self.command = input()
             logging.debug(f'user_input: {self.command}')
             if self.command == 'exit':
                 exit()
@@ -97,14 +108,14 @@ class Browser:
                 Browser.browser_stack.pop()
                 self.url = Browser.browser_stack.pop()
                 self.request()
+                Browser.print_saved_webpage(self)
             else:
                 try:
                     self.check_url()
                     self.url = self.command
                     self.request()
-                    Browser.print_saved_webpage(self, self.url)
-                    # Browser.open_website(self)
-                    
+                    Browser.print_saved_webpage(self)
+                    self.command = 'exit'
                     # self.start()
                 except KeyError as err:
                     print(f'UnacceptableUrl error: url "{self.command}" can not be accessed')
@@ -114,7 +125,8 @@ class Browser:
 
 
 def main():
-    directory = sys.argv[1]  # get a name from a command line for a folder to save pages in
+    # directory = sys.argv[1]  # get a name from a command line for a folder to save pages in
+    directory = 'dir'
     logging.debug(f'create directory: {directory}')
     if not os.access(directory, os.F_OK):  # check if directory exists
         os.mkdir(directory)  # create a single directory.
