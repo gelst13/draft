@@ -1,147 +1,80 @@
-# !/usr/bin/python
-# -*- coding: utf-8
-# $Text-Based Browser 5/6
+# $Flashcards 4/7
 """
 
 """
 import logging
-import os
-import re
-import requests
-import sys
-from bs4 import BeautifulSoup
-from collections import deque
+
 
 logging.basicConfig(filename='bo.log', level=logging.DEBUG, filemode='a',
                     format='%(levelname)s - %(message)s')
 
 
-class InvalidUrl(Exception):
-    def __str__(self):
-        # return 'InvalidUrl error:  URL is incorrect, it must contain at least one dot'
-        return 'Incorrect URL'
 
 
-class UnacceptableUrl(Exception):
-    """how to add exact url in error message?"""
+class Flashcards:
+    def __init__(self):
+        self.cards = dict()
+        self.answer = ''
+        self.quantity = 0
     
-    def __repr__(self):
-        return 'UnacceptableUrl error: {url} can not be accessed'
-    
-    def __str__(self):
-        return self.__repr__()
-
-
-class Browser:
-    browser_stack = deque()
-    tag_list = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'ul', 'ol', 'li']
-    
-    def __init__(self, directory):
-        self.command = ''
-        self.url = None
-        self.r = None
-        self.readable_text = list()
-        self.directory = directory
-        self.session = requests.Session()
-    
-    def check_url(self):
-        logging.info("checking self.command if it's a valid URL")
-        if '.' not in self.command:
-            raise InvalidUrl
-    
-    def connect(self):
-        """Check connection: request' status code"""
-        try:
-            logging.info('connecting ...')
-            logging.debug('https://' + self.url)
-            headers = {'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US,en;q=0.5'}
-            response = self.session.get('https://' + self.url, headers=headers)
-            if response.status_code == 200:
-                logging.debug(response.status_code)
-                self.r = response
-                return 1
-        except requests.exceptions.RequestException:
-            logging.info('No connection!')
-            logging.error(response.status_code)
-    
-    def request(self):  # Create response-object and save it to self.r
-        if Browser.connect(self) == 1:
-            soup = BeautifulSoup(self.r.content, 'html.parser')
-            for tag in Browser.tag_list:
-                logging.info(tag)
-                for result in soup.find_all(tag):
-                    t = result.text
-                    t = t.lstrip('\n')
-                    t = t.replace('\n', '')
-                    if t not in self.readable_text:
-                        if t != '' or t != ' ':
-                            self.readable_text.append(t)
-            print(*self.readable_text, sep='\n')
-            self.save_website()
-    
-    def get_filename(self):
-        domain = re.search('[.a-z]{3,4}$', self.url)
-        return self.url[:domain.start()]
-    
-    def print_saved_webpage(self):
-        logging.debug(f'printing {self.url} ...')
-        with open(f'{self.directory}/{self.get_filename()}', 'r', encoding='utf-8') as f:
-            print(f.read())
-    
-    def save_website(self):
-        Browser.browser_stack.append(self.url)
-        logging.debug(f'current page is:    https://www.{self.url} ')
-        with open(f"{self.directory}/{self.get_filename()}", 'w', encoding='utf-8') as file:
-            for line in self.readable_text:
-                if not re.match('^[\\n ]+$', line) or not re.match('^[ ]+|$', line) or not re.match('^[ ]+$', line):
-                    line = line.replace('\n', ' ')
-                    file.write(line.lstrip() + '\n')
-        logging.debug('The website is successfully saved.')
-        logging.debug(f'contents of {self.directory}: {os.listdir(self.directory)}')
-    
-    def start(self):
-        logging.info('start...')
-        # self.command = 'docs.python.org'
-        while True:
-            self.command = input()
-            logging.debug(f'user_input: {self.command}')
-            if self.command == 'exit':
-                exit()
-            # elif self.command in ('nytimes', 'bloomberg'):
-            #     # if the string corresponds to the name of any file with a web page you saved before
-            #     with open(f'{self.directory}/{self.command}', 'r', encoding='utf-8') as f:
-            #         for line in f:
-            #             print(line)
-            elif self.command == 'back' and len(Browser.browser_stack) < 2:
-                pass
-            elif self.command == 'back':
-                logging.info('--back')
-                Browser.browser_stack.pop()
-                self.url = Browser.browser_stack.pop()
-                self.request()
-                Browser.print_saved_webpage(self)
+    def get_data(self, category):
+        word = input()
+        if category == 'term':
+            terms = [self.cards[key][0] for key in list(self.cards.keys())]
+            if word in terms:
+                print(f'The {category} "{word}" already exists. Try again:')
+                return Flashcards.get_data(self, category)
             else:
-                try:
-                    self.check_url()
-                    self.url = self.command
-                    self.request()
-                    Browser.print_saved_webpage(self)
-                    # self.command = 'exit'
-                except KeyError as err:
-                    print(f'UnacceptableUrl error: url "{self.command}" can not be accessed')
-                except InvalidUrl as err:
-                    print(err)
-                    continue
+                return word
+        elif category == 'definition':
+            definitions = [self.cards[key][1] for key in list(self.cards.keys())]
+            if word in definitions:
+                print(f'The {category} "{word}" already exists. Try again:')
+                return Flashcards.get_data(self, category)
+            else:
+                return word
+         
+    
+    def create_cards(self, index):
+        print(f'The term for card #{index}:')
+        # term = input()
+        term = Flashcards.get_data(self, 'term')
+            # term = input()
+        print(f'The definition for card #{index}:')
+        # definition = input()
+        definition = Flashcards.get_data(self, 'definition')
+            # definition = input()
+        self.cards.update({index: (term, definition)})
+    
+    def check_answers(self):
+        reverse_dict = dict()
+        for term, definition in self.cards.values():
+            reverse_dict[definition] = term
+        logging.debug(reverse_dict)
+        for index in list(self.cards.keys()):
+            print(f'Print the definition of "{self.cards[index][0]}"')
+            answer = input()
+            if answer == self.cards[index][1]:
+                print('Correct!')
+            else:
+                if answer in list(reverse_dict.keys()):
+                    print(f'Wrong. The right answer is "{self.cards[index][1]}", '
+                          f'but your definition is correct for "{reverse_dict[answer]}".')
+                else:
+                    print(f'Wrong. The right answer is "{self.cards[index][1]}".')
+        
+    def start(self):
+        print('Input the number of cards:')
+        self.quantity = int(input())
+        Flashcards.create_cards(self, 1)
+        for index in range(2, self.quantity + 1):
+            Flashcards.create_cards(self, index)
+        logging.debug(self.cards)
+        self.check_answers()
 
 
 def main():
-    directory = sys.argv[1]  # get a name from a command line for a folder to save pages in
-    # directory = 'dir'
-    logging.debug(f'create directory: {directory}')
-    if not os.access(directory, os.F_OK):  # check if directory exists
-        os.mkdir(directory)  # create a single directory.
-    new = Browser(directory)
-    logging.debug(new)
+    new = Flashcards()
     new.start()
 
 
