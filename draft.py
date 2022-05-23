@@ -1,3 +1,5 @@
+# !/usr/bin/python
+# -*- coding: utf-8
 # $Text-Based Browser 5/6
 """
 
@@ -16,7 +18,8 @@ logging.basicConfig(filename='bo.log', level=logging.DEBUG, filemode='a',
 
 class InvalidUrl(Exception):
     def __str__(self):
-        return 'InvalidUrl error:  URL is incorrect, it must contain at least one dot'
+        # return 'InvalidUrl error:  URL is incorrect, it must contain at least one dot'
+        return 'Incorrect URL'
 
 
 class UnacceptableUrl(Exception):
@@ -31,7 +34,7 @@ class UnacceptableUrl(Exception):
 
 class Browser:
     browser_stack = deque()
-    tag_list = ['p', 'a', 'ul', 'ol', 'li']
+    tag_list = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'ul', 'ol', 'li']
     
     def __init__(self, directory):
         self.command = ''
@@ -65,8 +68,15 @@ class Browser:
         if Browser.connect(self) == 1:
             soup = BeautifulSoup(self.r.content, 'html.parser')
             for tag in Browser.tag_list:
+                logging.info(tag)
                 for result in soup.find_all(tag):
-                    self.readable_text.append(result.text)
+                    t = result.text
+                    t = t.lstrip('\n')
+                    t = t.replace('\n', '')
+                    if t not in self.readable_text:
+                        if t != '' or t != ' ':
+                            self.readable_text.append(t)
+            print(*self.readable_text, sep='\n')
             self.save_website()
     
     def get_filename(self):
@@ -83,16 +93,17 @@ class Browser:
         logging.debug(f'current page is:    https://www.{self.url} ')
         with open(f"{self.directory}/{self.get_filename()}", 'w', encoding='utf-8') as file:
             for line in self.readable_text:
-                if line != '\n':
-                    file.write(line + '\n')
+                if not re.match('^[\\n ]+$', line) or not re.match('^[ ]+|$', line) or not re.match('^[ ]+$', line):
+                    line = line.replace('\n', ' ')
+                    file.write(line.lstrip() + '\n')
         logging.debug('The website is successfully saved.')
         logging.debug(f'contents of {self.directory}: {os.listdir(self.directory)}')
     
     def start(self):
         logging.info('start...')
-        self.command = 'docs.python.org'
+        # self.command = 'docs.python.org'
         while True:
-            # self.command = input()
+            self.command = input()
             logging.debug(f'user_input: {self.command}')
             if self.command == 'exit':
                 exit()
@@ -115,8 +126,7 @@ class Browser:
                     self.url = self.command
                     self.request()
                     Browser.print_saved_webpage(self)
-                    self.command = 'exit'
-                    # self.start()
+                    # self.command = 'exit'
                 except KeyError as err:
                     print(f'UnacceptableUrl error: url "{self.command}" can not be accessed')
                 except InvalidUrl as err:
@@ -125,8 +135,8 @@ class Browser:
 
 
 def main():
-    # directory = sys.argv[1]  # get a name from a command line for a folder to save pages in
-    directory = 'dir'
+    directory = sys.argv[1]  # get a name from a command line for a folder to save pages in
+    # directory = 'dir'
     logging.debug(f'create directory: {directory}')
     if not os.access(directory, os.F_OK):  # check if directory exists
         os.mkdir(directory)  # create a single directory.
