@@ -49,7 +49,9 @@ class Flashcards:
     initial_string = ''
     log = io.StringIO(initial_string)
     
-    def __init__(self):
+    def __init__(self, cmd_commands):
+        self.cmd_commands = cmd_commands
+        self.auto_export = False
         self.cards = dict()  # {"term":"definition, mistakes"}
         self.answer = ''
         self.errors = 0  # flag for hardest_card()
@@ -83,13 +85,17 @@ class Flashcards:
             print(f"Can't remove '{card}': there is no such card.")
         logging.debug(self.cards)
     
-    def import_cards(self):
+    def import_cards(self, data=None):
         """load cards from file"""
         logging.info('def import_cards...')
         self.imported_cards = []
-        print('File name:')
-        filename = input()
-        Flashcards.log.write(filename + '\n')
+        if not data:
+            print('File name:')
+            filename = input()
+            Flashcards.log.write(filename + '\n')
+        else:
+            logging.debug(f'starting auto_import from {data}')
+            filename = data
         if not os.access(filename, os.F_OK):  # check if directory exists
             print('File not found.')
         else:
@@ -117,12 +123,16 @@ class Flashcards:
                 print(err)
                 continue
     
-    def export(self):
+    def export(self, data=None):
         """save cards to file"""
         logging.info('def export')
-        print('File name:')
-        filename = input()
-        Flashcards.log.write(filename + '\n')
+        if not data:
+            print('File name:')
+            filename = input()
+            Flashcards.log.write(filename + '\n')
+        else:
+            filename = data
+        logging.info(f'starting export in {filename}')
         with open(f'{filename}', 'w', encoding='utf-8') as csv_file:
             csv_writer = csv.writer(csv_file)
             csv_writer.writerow(['term', 'definition', 'error count'])  # column names
@@ -148,9 +158,13 @@ class Flashcards:
     
     def exit_app(self):
         logging.info('def exit_app')
-        self.quantity = 0
-        print('Bye bye!')
-        Flashcards.log.close()
+        logging.debug(self.auto_export)
+        if self.auto_export:
+            logging.info('starting auto_export...')
+            Flashcards.export(self, self.cmd_commands['auto_export'][1])
+        else:
+            print('Bye bye!')
+        # Flashcards.log.close()
         exit()
     
     def save_log(self):
@@ -263,6 +277,11 @@ class Flashcards:
     
     def start(self):
         logging.info('def start ...')
+        if self.cmd_commands['auto_import']:
+            Flashcards.import_cards(self, self.cmd_commands['auto_import'][1])
+        if self.cmd_commands['auto_export']:
+            self.auto_export = True
+        logging.debug(f'self.auto_export = {self.auto_export}')
         while True:
             print('Input the action (add, remove, import, export, ask, exit, log, hardest card, reset stats):')
             self.command = input()
@@ -281,9 +300,29 @@ class Flashcards:
         # self.check_answers()
 
 
+def parse_args(args_data):
+    params = {'auto_export': None, 'auto_import': None}
+    if len(args_data) > 1:
+        for arg in args_data:
+            if arg.startswith('--export_to'):
+                ex_file = arg.split('=')[1]
+                params.update({'auto_export': (True, ex_file)})
+            elif arg.startswith('--import_from'):
+                imp_file = arg.split('=')[1]
+                params.update({'auto_import': (True, imp_file)})
+        return params
+    else:
+        return params
+
+
 def main():
     logging.info('def main ...')
-    new = Flashcards()
+    cmd_args = sys.argv  # like ['flashcards.py', '--export_to=states.txt']
+    logging.debug(cmd_args)
+    parsed_args = parse_args(cmd_args)  # [{'auto_export': None}, {'auto_import': None}]
+    # or [{'auto_export': (True, 'states.txt')}, {'auto_import': None}]
+    logging.debug(parsed_args)
+    new = Flashcards(parsed_args)
     new.start()
 
 
