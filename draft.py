@@ -1,4 +1,4 @@
-# Easy Rider Bus Company 4/6
+# Easy Rider Bus Company 5/6
 import logging
 import json
 import re
@@ -34,6 +34,7 @@ class Rider:
         self.stops = {'Start stops': set(),
                       'Transfer stops': set(),
                       'Finish stops': set()}
+        self.a_time_errors = []
 
     def get_data(self):
         self.data = json.loads(input())
@@ -89,13 +90,14 @@ class Rider:
         """how many bus lines we have and how many stops there are on each line"""
         logging.info('...def check_lines...')
         for entry in self.data:
+            logging.debug(entry)
             # logging.debug(entry['bus_id'], entry['stop_id'])
             if entry['bus_id'] not in list(self.bus_lines.keys()):
-                if entry['bus_id'] != '':
-                    self.bus_lines[entry['bus_id']] = [(entry['stop_id'], entry['stop_type'], entry['stop_name'])]
+                self.bus_lines[entry['bus_id']] = [(entry['stop_id'], entry['stop_type'], entry['stop_name'],
+                                                    entry['a_time'])]
             else:
                 current_values = self.bus_lines[entry['bus_id']]
-                current_values.append((entry['stop_id'], entry['stop_type'], entry['stop_name']))
+                current_values.append((entry['stop_id'], entry['stop_type'], entry['stop_name'], entry['a_time']))
                 self.bus_lines.update({entry['bus_id']: current_values})
 
     def check_stops(self):
@@ -127,6 +129,21 @@ class Rider:
                 self.stops.update({'Transfer stops': current})
         logging.debug(self.stops)
 
+    def check_time(self):
+        logging.info('...def check_time')
+        for bus_line, stops_info in list(self.bus_lines.items()):
+            for index in range(len(stops_info)):
+                try:
+                    logging.debug(stops_info[index][3], stops_info[index + 1][3])
+                    if stops_info[index][3] >= stops_info[index + 1][3]:
+                        self.a_time_errors.append((bus_line, stops_info[index + 1][2]))
+                        break
+                except IndexError:
+                    break
+                except ValueError as e:
+                    logging.debug(e)
+                    continue
+
     def display_errors(self):
         logging.info('...def display_errors')
         # print(f'Type and required field validation: {sum(list(self.errors.values()))} errors')
@@ -139,8 +156,16 @@ class Rider:
         # print('Line names and number of stops:')
         # for key, value in self.bus_lines.items():
         #     print(f'bus_id: {key}, stops: {len(value)}')
-        for key, value in self.stops.items():
-            print(f"{key}: {len(value)} {sorted(list(value))}")
+        # for key, value in self.stops.items():
+        #     print(f"{key}: {len(value)} {sorted(list(value))}")
+        # stage 5/6
+        print('Arrival time test:')
+        logging.debug(self.a_time_errors)
+        if not self.a_time_errors:
+            print('OK')
+        else:
+            for error in self.a_time_errors:
+                print(f'bus_id line {error[0]}: wrong time on station {error[1]}')
 
     def validation(self):
         logging.info('...def validation')
@@ -148,7 +173,8 @@ class Rider:
         # self.check_type()
         # self.check_format()
         self.check_lines()
-        self.check_stops()
+        # self.check_stops()
+        self.check_time()
         self.display_errors()
 
 
@@ -159,4 +185,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
