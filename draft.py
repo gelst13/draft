@@ -137,6 +137,21 @@ class InfoBase:
             return data_
 
     @staticmethod
+    def delete_row(key):
+        try:
+            conn = sqlite3.connect('TimeZoneReminder.db')
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM contact WHERE contact_name = "%s"' % key)
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as error:
+            print("Failed to delete record from contact table", error)
+        finally:
+            if conn:
+                conn.close()
+
+
+    @staticmethod
     def print_contact_table():
         with sqlite3.connect('TimeZoneReminder.db') as conn:
             cursor = conn.cursor()
@@ -168,8 +183,10 @@ class TimeKeeper:
                   'ART': (-3, 'Argentina Time'),
                   'EST': (-5, 'Eastern Standard Time', 1),
                   'IST': (5.5, 'India Standard Time'),
+                  'JST': (9, 'Japan Standard Time'),
+                  'MSK': (3, 'Moscow Standard Time'),
                   'PST': (-8, 'Pacific Standard Time', 1),
-                  'JST': (9, 'Japan Standard Time')}
+                  }
 
     def convert_time(self):
         self.call += 0
@@ -203,6 +220,7 @@ b. time of some event in another time zone into my local time''')
             else:
                 print('Contact info:')
                 print(InfoBase.select_row('contact_name', data_for_search.capitalize()))
+                print(f'time for {data_for_search.capitalize()} now: ...')
 
     def add_contact(self):
         # contact = (PK) contact_name / platform / comment / location / zone_name / difference_to_utc
@@ -216,7 +234,7 @@ b. time of some event in another time zone into my local time''')
             else:
                 platform = input('Where do you communicate? (Discord, Skype, Telegram, WhatsApp):> ').capitalize()
                 comment = input('Additional info/ commentary:> ')
-                location = input('Where this contact lives?:> ')
+                location = input('Where this contact lives?:> ').capitalize()
                 time_zone = input('Enter the name of time zone or hours of time difference to UTC/GMT:> ')
                 if time_zone.isalpha():
                     zone_name = time_zone.upper()
@@ -235,28 +253,73 @@ b. time of some event in another time zone into my local time''')
         InfoBase.transfer_to_sql(*self.new_contact)
 
     def change_contact(self):
-        self.call += 0
-        contact_name = input('Enter contact name/nick to be changed: >')
+        # [ contact_name / platform / comment / location / zone_name / difference_to_utc ]
+        contact_to_change = input('\nEnter contact name/nick to be changed:> ').capitalize()
+        if contact_to_change not in InfoBase.select_column('contact_name'):
+            print('error: no such contact')
+            self.change_contact()
 
-    actions = {'0': convert_time,
-               '1': add_contact,
-               '2': see_info,
-               '3': change_contact,
+        record_to_change = InfoBase.select_row('contact_name', contact_to_change)
+        print(record_to_change)
+        new_record = [x for x in record_to_change[0]]
+        change = input('\nchoose action:\ndel - delete contact\nccc - change contact\nbbb - go back\n> ')
+        if change == 'bbb':
+            self.start()
+        elif change == 'del':
+            InfoBase.delete_row(contact_to_change)
+            print('Contact deleted')
+        elif change == 'ccc':
+            while True:
+                print('''What field do you wish to change:
+                0 - contact name
+                1 - platform
+                2 - comment
+                3 - location
+                4 - zone name
+                5 - difference to UTC
+                sss - save changes''')
+                field_no = input()
+                try:
+                    if field_no == 'sss':
+                        print('save')
+                        InfoBase.delete_row(contact_to_change)
+                        InfoBase.transfer_to_sql(*new_record)
+                        break
+                    print(record_to_change[0][int(field_no)])
+                    new_value = input('Change to:> ')
+                    print(new_record)
+                    if field_no == '5':  # difference to UTC keep as float
+                        new_record[int(field_no)] = float(new_value)
+                    elif field_no == '4':  # zone name
+                        new_record[int(field_no)] = new_value.upper()
+                    else:
+                        new_record[int(field_no)] = new_value.capitalize()
+                    print(new_record)
+                except ValueError:
+                    print('wrong command')
+                    continue
+
+
+
+    actions = {'00': convert_time,
+               '11': add_contact,
+               '22': see_info,
+               '33': change_contact,
                }
 
     def start(self):
         sql_operation = InfoBase()
         sql_operation.create_table()
         while True:
-            print('\nchoose action:\n0.convert time\n1.add contact\n2.see contact info'
-                  '\n3.change contact\n4.exit')
+            print('\nchoose action:\n00.convert time\n11.add contact\n22.see contact info'
+                  '\n33.change contact\n44.exit')
             self.command = input('> ')
-            if self.command == '4':
+            if self.command == '44':
                 exit()
-            elif self.command == '00':
+            elif self.command == '000':
                 sql_operation.print_contact_table()
             elif self.command not in list(TimeKeeper.actions.keys()):
-                print('Incorrect command. Enter number from 0 to 4')
+                print('Incorrect command. Enter 00, 11, 22, 33 or 44')
             else:
                 TimeKeeper.actions[self.command.lower()](self)
 
