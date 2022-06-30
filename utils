@@ -1,0 +1,87 @@
+'''
+class datetime.timedelta
+A duration expressing the difference between two date, time, or datetime instances to microsecond resolution.
+
+class datetime.tzinfo
+
+class datetime.timezone
+A class that implements the tzinfo abstract base class as a fixed offset from the UTC.
+
+'''
+import datetime
+import time
+import pytz
+from dateutil.tz import tzoffset, tzlocal, tz
+
+
+def convert_to_tz():
+    """convert current local time into another time zone
+    Return str"""
+
+    tz_data = input('Enter the name of time zone or hours of time difference to UTC/GMT:> ')
+    try:
+        offset = datetime.timedelta(hours=float(tz_data))
+        tz = datetime.timezone(offset)
+        return datetime.datetime.now(tz).strftime('%d-%m-%Y %H:%M')
+    except ValueError:
+        tz = pytz.timezone(tz_olson[tz_data.upper()])
+        return datetime.datetime.now(tz).strftime('%d-%m-%Y %H:%M')
+
+
+def convert_from_tz():
+    """"""
+    tz_from = input('Enter the name of time zone or hours of time difference to UTC/GMT:> ')
+    time0 = list(map(int, input('Enter time in the format 00:00 > ').split(':')))
+    date = list(map(int, datetime.datetime.now().strftime('%Y-%m-%d').split('-')))  # [2022, 6, 29]
+
+    try:
+        # if user entered offset
+        dt = datetime.datetime(date[0], date[1], date[2], time0[0], time0[1], 0,
+                               tzinfo=tzoffset(None, int(float(tz_from) * 3600)))  # in seconds
+        print(dt)
+    except ValueError:
+        try:
+            # if user entered valid zone name
+            tz_from_pytz = pytz.timezone(tz_olson[tz_from.upper()])
+            dt = tz_from_pytz.localize(datetime.datetime(date[0], date[1], date[2], time0[0], time0[1]))
+            print(f"when it's {dt.strftime('%H:%M %d-%m-%Y')} in {tz_from.upper()} time zone", )
+        except KeyError as e:
+            print(f'there are no {tz_from} time zone in my database. Try again with offset(time difference to UTC)')
+            return 0
+
+    dt_utc = dt.astimezone(pytz.utc)
+
+    # get local tz from PC
+    local_zone = tz.tzlocal()
+    dt_local = dt_utc.astimezone(local_zone)
+    print(f"It is {dt_local.strftime('%H:%M %d-%m-%Y')} at your place")
+
+
+
+tz_olson = {'UTC': 'Etc/UTC',
+              'ART': 'America/Argentina/Buenos_Aires',
+              'CST': 'US/Central',
+              'EST': 'US/Eastern',
+              'IST': 'Asia/Kolkata',
+              'JST': 'Asia/Tokyo',
+              'MSK': 'Europe/Moscow',
+              'PST': 'US/Pacific',
+              'TURKEY': 'Europe/Istanbul'
+                  }
+
+# print(convert_to_tz())
+
+convert_from_tz()
+
+# # CHECK
+# for key in tz_olson:
+#     try:
+#         dt = datetime.datetime.now(tz=pytz.timezone(tz_olson[key]))
+#         print(dt.tzinfo) # turned into a string, it can be split/parsed
+#         print(dt.strftime("%Z"))
+#     except AttributeError:
+#         continue
+#
+
+
+
