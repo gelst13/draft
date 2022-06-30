@@ -20,7 +20,7 @@ filter contact's list by:
 - communicating platform
 ----
 menu:
-0.convert time:
+0.time operation:
 - my local time into chosen time zone
 - time of some event in another time zone into my local time
 1.add contact
@@ -38,17 +38,9 @@ def convert_time(self):
     a. my local time into chosen time zone
     b. vice versa
 
-def extract_time(self):
-    my time = UTC +3
-    take difference_to_utc and calculate difference to my time,
-    return my time
 
-+ def see_info(self): DONE, 2 pomodoros
-    choice = input('show list of contacts? Y/N:> ')
-    data_for_search = input('Enter data for search(contact name/time zone):> ')
 
-def change_contact(self):
-    change existing contact(just delete, rename or change some info in its record)
+
 
 - retrieve your current time zone from your device settings
 - convert float time like 2.5 hours
@@ -61,7 +53,8 @@ def change_contact(self):
 import logging
 import re
 import sqlite3
-
+import time
+from datetime import timedelta
 
 logging.basicConfig(filename='bo.log', level=logging.DEBUG, filemode='a',
                     format='%(levelname)s - %(message)s')
@@ -188,18 +181,58 @@ class TimeKeeper:
                   'PST': (-8, 'Pacific Standard Time', 1),
                   }
 
-    def convert_time(self):
+    @staticmethod
+    def calculate_time(time_obj, time_interval: list):
+        """ how much time will it be in ..2 hours?
+        Take time object.
+        Return str
+        """
+        time0 = list(map(int, time.strftime("%H:%M", time_obj).split(':')))
+        hours, minutes = time0[0], time0[1]
+        time1 = timedelta(hours=hours, minutes=minutes)
+        print(time1)  # CHECK
+        hours2, minutes2 = hours + time_interval[0], minutes + time_interval[1]
+        time2 = timedelta(hours=hours2, minutes=minutes2)
+        return str(time2)[:5]
+
+    def time_operation(self):
         self.call += 0
-        print('''it's possible to convert time:
-a. my local time into chosen time zone
-b. time of some event in another time zone into my local time''')
+        while True:
+            print('''\nAvailable time operations:
+0-display the time that will come after a certain time period
+1-display current time in another time zone
+2-convert local time in another time zone:
+3-convert time of another time zone into my local time
+bbb - go back
+''')
+            operation = input()
+            if operation == 'bbb':
+                self.start()
+            if operation == '0':
+                time_period = list()
+                time_period.append(int(input('enter how many hours forward (00-24):> ')))
+                time_period.append(int(input('enter how many minutes forward (00-59):> ')))
+                current_local_time = time.localtime()
+                print(f"In {time_period[0]} hours {time_period[1]} minutes it'll be:")
+                print(self.calculate_time(current_local_time, time_period))
+                self.time_operation()
+            tz = input('Enter the name of time zone or hours of time difference to UTC/GMT:> ')
+            if operation == '1':
+                print(f'current time in {tz} time zone: ...')
+            elif operation == '2':
+                local_time = input('Enter local time in format 00:00:> ')
+                print(f'local {local_time} is ... in {tz} time zone')
+            elif operation == '3':
+                your_friend_time = input('Enter time from another time zone in format 00:00:> ')
+                print(f'{your_friend_time} of {tz} time zone corresponds to ... your local time')
 
-    def extract_time(self):
-        """my time = UTC +3
-        take difference_to_utc and calculate difference to my time,
-        return my time"""
 
-        pass
+
+
+
+
+
+
 
     def see_info(self):
         self.call += 0
@@ -299,9 +332,7 @@ b. time of some event in another time zone into my local time''')
                     print('wrong command')
                     continue
 
-
-
-    actions = {'00': convert_time,
+    actions = {'00': time_operation,
                '11': add_contact,
                '22': see_info,
                '33': change_contact,
@@ -311,7 +342,7 @@ b. time of some event in another time zone into my local time''')
         sql_operation = InfoBase()
         sql_operation.create_table()
         while True:
-            print('\nchoose action:\n00.convert time\n11.add contact\n22.see contact info'
+            print('\nchoose action:\n00.time operation\n11.add contact\n22.see contact info'
                   '\n33.change contact\n44.exit')
             self.command = input('> ')
             if self.command == '44':
