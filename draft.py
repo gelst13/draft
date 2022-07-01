@@ -50,11 +50,13 @@ def convert_time(self):
 - apply everything possible from the theory
 - write unit tests
 """
+import datetime
 import logging
+import pytz
 import re
 import sqlite3
 import time
-from datetime import timedelta
+from dateutil.tz import tzoffset, tzlocal, tz
 
 logging.basicConfig(filename='bo.log', level=logging.DEBUG, filemode='a',
                     format='%(levelname)s - %(message)s')
@@ -181,6 +183,17 @@ class TimeKeeper:
                   'PST': (-8, 'Pacific Standard Time', 1),
                   }
 
+    tz_olson = {'UTC': 'Etc/UTC',
+                'ART': 'America/Argentina/Buenos_Aires',
+                'CST': 'US/Central',
+                'EST': 'US/Eastern',
+                'IST': 'Asia/Kolkata',
+                'JST': 'Asia/Tokyo',
+                'MSK': 'Europe/Moscow',
+                'PST': 'US/Pacific',
+                'TURKEY': 'Europe/Istanbul'
+                }
+
     @staticmethod
     def calculate_time(time_obj, time_interval: list):
         """ how much time will it be in ..2 hours?
@@ -189,11 +202,85 @@ class TimeKeeper:
         """
         time0 = list(map(int, time.strftime("%H:%M", time_obj).split(':')))
         hours, minutes = time0[0], time0[1]
-        time1 = timedelta(hours=hours, minutes=minutes)
-        print(time1)  # CHECK
+        time1 = datetime.timedelta(hours=hours, minutes=minutes)
         hours2, minutes2 = hours + time_interval[0], minutes + time_interval[1]
-        time2 = timedelta(hours=hours2, minutes=minutes2)
+        time2 = datetime.timedelta(hours=hours2, minutes=minutes2)
         return str(time2)[:5]
+
+    @staticmethod
+    def show_current_time():
+        """convert current local time into another time zone
+        Return str"""
+
+        tz_data = input('Enter the name of time zone or offset (hours of time difference) to UTC/GMT:> ')
+        try:
+            offset = datetime.timedelta(hours=float(tz_data))
+            tz_ = datetime.timezone(offset)
+            # return datetime.datetime.now(tz_).strftime('%d-%m-%Y %H:%M')
+        except ValueError:
+            try:
+                tz_ = pytz.timezone(TimeKeeper.tz_olson[tz_data.upper()])
+                # return
+            except KeyError as e:
+                print(f'there are no {tz_data.upper()} time zone in my database. Try again with offset')
+                return False
+        print(f"current time in {tz_data} time zone: {datetime.datetime.now(tz_).strftime('%d-%m-%Y %H:%M')}")
+
+    @staticmethod
+    def date_constructor(zone_info, date: list, time0: list):
+        """Return time zone-aware object"""
+        if isinstance(zone_info, float):
+            # time from local time zone
+            return datetime.datetime(date[0], date[1], date[2], time0[0], time0[1], 0,
+                                     tzinfo=tzoffset(None, int(zone_info * 3600)))
+            # tz_from_pytz = pytz.timezone(zone_info)
+            # return tz_from_pytz.localize(datetime.datetime(date[0], date[1], date[2], time0[0], time0[1]))
+        try:
+            # if user provided offset
+            return datetime.datetime(date[0], date[1], date[2], time0[0], time0[1], 0,
+                                     tzinfo=tzoffset(None, int(float(zone_info) * 3600)))  # in seconds
+        except ValueError:
+            try:
+                # if user entered valid zone name
+                tz_from_pytz = pytz.timezone(TimeKeeper.tz_olson[zone_info.upper()])
+                return tz_from_pytz.localize(datetime.datetime(date[0], date[1], date[2], time0[0], time0[1]))
+            except KeyError:
+                print(f'there are no {zone_info} time zone in my database. Try again with offset to UTC')
+
+
+    @staticmethod
+    def convert_time(tz_from, tz_to, time_):
+        """
+
+        :return:
+        """
+        time0 = list(map(int, time_.split(':')))
+        date = list(map(int, datetime.datetime.now().strftime('%Y-%m-%d').split('-')))  # [2022, 6, 29]
+        dt = TimeKeeper.date_constructor(tz_from, date, time0)
+        print(f'datetime aware constructed: {dt}')  # CHECK
+        if not dt:
+            return False
+        dt_utc = dt.astimezone(pytz.utc)
+        print(f' UTC {dt_utc}')  # CHECK
+        if isinstance(tz_from, float):
+            # from local
+            # if user provided offset
+            hours = int(str(float(tz_to)).split('.')[0])
+            minutes = int(str(float(tz_to)).split('.')[1])
+            offset_ = datetime.timedelta(hours=hours, minutes=minutes)
+            tz_from_offset = datetime.timezone(offset_, name='UNKNOWN')
+            dt_converted = dt_utc.astimezone(tz=tz_from_offset)
+            # if user entered valid zone name
+            # tz_pytz = pytz.timezone(TimeKeeper.tz_olson[tz_to.upper()])
+            # dt_converted = dt_utc.astimezone(tz_pytz)
+            print(f" [{dt.strftime('%H:%M %d-%m-%Y')}] your local time = "
+                  f"[{dt_converted.strftime('%H:%M %d-%m-%Y')}] {tz_to} time zone.")
+
+        else:
+            # to local
+            dt_converted = dt_utc.astimezone(tz_to)
+            print(f"[{dt.strftime('%H:%M %d-%m-%Y')} {tz_from}] time zone = "
+                  f"[{dt_converted.strftime('%H:%M %d-%m-%Y')}] your local time.")
 
     def time_operation(self):
         self.call += 0
@@ -201,8 +288,7 @@ class TimeKeeper:
             print('''\nAvailable time operations:
 0-display the time that will come after a certain time period
 1-display current time in another time zone
-2-convert local time in another time zone:
-3-convert time of another time zone into my local time
+2-convert time(local time to some other time zone or vice versa)
 bbb - go back
 ''')
             operation = input()
@@ -216,23 +302,26 @@ bbb - go back
                 print(f"In {time_period[0]} hours {time_period[1]} minutes it'll be:")
                 print(self.calculate_time(current_local_time, time_period))
                 self.time_operation()
-            tz = input('Enter the name of time zone or hours of time difference to UTC/GMT:> ')
+
             if operation == '1':
-                print(f'current time in {tz} time zone: ...')
+                self.show_current_time()
             elif operation == '2':
-                local_time = input('Enter local time in format 00:00:> ')
-                print(f'local {local_time} is ... in {tz} time zone')
+                from_local = input('convert local time? y/n ')
+                if from_local.lower() == 'y':
+                    tz_from = float(datetime.datetime.now().astimezone().strftime('%z')) / 100  # get local offset
+                    tz_to = input('Enter the destination time zone: name or offset to UTC/GMT:> ')
+                elif from_local.lower() != 'n':
+                    print('Wrong command!')
+                    self.time_operation()
+                else:
+                    tz_from = input('Enter the original time zone: name or offset to UTC/GMT:> ')
+                    tz_to = tz.tzlocal()  # get local tz from PC
+
+                _time = input('Enter time in format 00:00:> ')
+                self.convert_time(tz_from, tz_to, _time)
             elif operation == '3':
                 your_friend_time = input('Enter time from another time zone in format 00:00:> ')
                 print(f'{your_friend_time} of {tz} time zone corresponds to ... your local time')
-
-
-
-
-
-
-
-
 
     def see_info(self):
         self.call += 0
