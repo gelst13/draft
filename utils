@@ -1,87 +1,140 @@
-'''
-class datetime.timedelta
-A duration expressing the difference between two date, time, or datetime instances to microsecond resolution.
-
-class datetime.tzinfo
-
-class datetime.timezone
-A class that implements the tzinfo abstract base class as a fixed offset from the UTC.
-
-'''
-import datetime
-import time
-import pytz
-from dateutil.tz import tzoffset, tzlocal, tz
+import os
+import shutil
+import sqlite3
 
 
-def convert_to_tz():
-    """convert current local time into another time zone
-    Return str"""
+class InfoBase:
+    def __init__(self):
+        self.n = 0
 
-    tz_data = input('Enter the name of time zone or hours of time difference to UTC/GMT:> ')
-    try:
-        offset = datetime.timedelta(hours=float(tz_data))
-        tz = datetime.timezone(offset)
-        return datetime.datetime.now(tz).strftime('%d-%m-%Y %H:%M')
-    except ValueError:
-        tz = pytz.timezone(tz_olson[tz_data.upper()])
-        return datetime.datetime.now(tz).strftime('%d-%m-%Y %H:%M')
+    @staticmethod
+    def create_table():
+        with sqlite3.connect('tzrContactBook.db') as conn:
+            cursor = conn.cursor()
 
+            cursor.execute("""CREATE TABLE if not exists contact (contact_name VARCHAR(255) PRIMARY KEY,
+                                                                  platform VARCHAR(255), 
+                                                                  comment VARCHAR(255), 
+                                                                  location VARCHAR(255),
+                                                                  zone_name VARCHAR(255), 
+                                                                  utc_offset FLOAT)""")
+            conn.commit()
 
-def convert_from_tz():
-    """"""
-    tz_from = input('Enter the name of time zone or hours of time difference to UTC/GMT:> ')
-    time0 = list(map(int, input('Enter time in the format 00:00 > ').split(':')))
-    date = list(map(int, datetime.datetime.now().strftime('%Y-%m-%d').split('-')))  # [2022, 6, 29]
+    @staticmethod
+    def transfer_to_sql(contact_name, platform, comment, location, zone_name, utc_offset):
+        with sqlite3.connect('tzrContactBook.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO contact(contact_name, platform, comment, location, zone_name, utc_offset)"
+                " VALUES (?, ?, ?, ?, ?, ?)", (contact_name, platform, comment, location, zone_name, utc_offset))
+            conn.commit()
 
-    try:
-        # if user entered offset
-        dt = datetime.datetime(date[0], date[1], date[2], time0[0], time0[1], 0,
-                               tzinfo=tzoffset(None, int(float(tz_from) * 3600)))  # in seconds
-        print(dt)
-    except ValueError:
+    @staticmethod
+    def select_column(column_name):
+        with sqlite3.connect('tzrContactBook.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('select %s from contact' % column_name)
+            data_ = cursor.fetchall()
+            conn.commit()
+            return [x[0] for x in data_]
+
+    @staticmethod
+    def select_row(column: str, key_word) -> []:
+        """Filter contact table by 1 field: contact_name/platform/time_zone or utc_offset
+        Return found rows as [(), (), ..]"""
+        # Never do this - insecure! using Python's string operations to assemble queries is not safe
+        # , as they are vulnerable to SQL injection attacks
+        with sqlite3.connect('tzrContactBook.db') as conn:
+            cursor = conn.cursor()
+            if column == 'utc_offset':
+                cursor.execute('SELECT * FROM contact WHERE %s = "%f"' % (column, key_word))  # because float
+            else:
+                cursor.execute('SELECT * FROM contact WHERE %s = "%s"' % (column, key_word))
+            data_ = cursor.fetchall()
+            conn.commit()
+            return data_
+
+    @staticmethod
+    def delete_row(key):
         try:
-            # if user entered valid zone name
-            tz_from_pytz = pytz.timezone(tz_olson[tz_from.upper()])
-            dt = tz_from_pytz.localize(datetime.datetime(date[0], date[1], date[2], time0[0], time0[1]))
-            print(f"when it's {dt.strftime('%H:%M %d-%m-%Y')} in {tz_from.upper()} time zone", )
-        except KeyError as e:
-            print(f'there are no {tz_from} time zone in my database. Try again with offset(time difference to UTC)')
-            return 0
+            conn = sqlite3.connect('tzrContactBook.db')
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM contact WHERE contact_name = "%s"' % key)
+            conn.commit()
+            conn.close()
+        except sqlite3.Error as error:
+            print("Failed to delete record from contact table", error)
+        finally:
+            if conn:
+                conn.close()
 
-    dt_utc = dt.astimezone(pytz.utc)
+    @staticmethod
+    def select_all():
+        with sqlite3.connect('tzrContactBook.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('select * from contact')
+            data_ = cursor.fetchall()
+            conn.commit()
+        return data_
 
-    # get local tz from PC
-    local_zone = tz.tzlocal()
-    dt_local = dt_utc.astimezone(local_zone)
-    print(f"It is {dt_local.strftime('%H:%M %d-%m-%Y')} at your place")
+    @staticmethod
+    def print_contact_table():
+        print('table: contact / tzrContactBook.db: ')
+        headers = ('contact_name', 'platform', 'comment', 'location', 'zone_name', 'utc_offset')
+        print('{0:15} | {1:10} | {2:50} | {3:8}  | {4:11}  | {5:9} '.format(headers[0],
+              headers[1], headers[2], headers[3], headers[4], headers[5]))
+        print('_' * 130)
+        content = InfoBase.select_all()
+        for entry in sorted(content):
+            # print(*entry, sep=' | ')
+            print('{0:15} | {1:10} | {2:50} | {3:8}  | {4:11}  | {5:9} '.format(entry[0],
+                  entry[1], entry[2], entry[3], str(entry[4]), str(entry[5])))
+            print()
+        print(f'Number of entries: {len(content)}')
+
+    @staticmethod
+    def specify_destination():
+        path = input("Specify path to location for saving Contacts' Book:> ")
+        folder = input('Enter name for folder(if necessary to create):> ')
+        windows = input('Is Windows - your OS ? y/n:> ')
+        if windows == 'y':
+            full_path = os.path.join(path, folder).strip() + '\\'
+        else:
+            full_path = os.path.join(path, folder).strip() + '/'
+        if not os.access(full_path, os.F_OK):
+            os.mkdir(full_path)
+        return full_path
+
+    @staticmethod
+    def export_contact_book():
+        data = InfoBase.select_all()
+        dst_folder = InfoBase.specify_destination()
+        file_name = 'tzr_contacts.csv'
+        with open(file_name, 'w', encoding='utf-8') as out_file:
+            out_file.write("Time Zone Reminder / Contacts' Book\n")
+            out_file.write('contact_name,platform,comment,location,zone_name,utc_offset\n')
+            for row in sorted(data):
+                out_file.write(';'.join(list(map(str, row))) + '\n')
+        shutil.copy(file_name, dst_folder)
+        if 'tzr_contacts.csv' in os.listdir(dst_folder):
+            print(f'{file_name} is successfully saved to {dst_folder}.')
+            os.remove(file_name)
 
 
+class TimeKeeper:
+    def __init__(self):
+        self.command = ''
+        self.call = 0
 
-tz_olson = {'UTC': 'Etc/UTC',
-              'ART': 'America/Argentina/Buenos_Aires',
-              'CST': 'US/Central',
-              'EST': 'US/Eastern',
-              'IST': 'Asia/Kolkata',
-              'JST': 'Asia/Tokyo',
-              'MSK': 'Europe/Moscow',
-              'PST': 'US/Pacific',
-              'TURKEY': 'Europe/Istanbul'
-                  }
+    tz_olson = {'UTC': 'Etc/UTC',
+                'ART': 'America/Argentina/Buenos_Aires',
+                'CST': 'US/Central',
+                'EST': 'US/Eastern',
+                'IST': 'Asia/Kolkata',
+                'JST': 'Asia/Tokyo',
+                'MSK': 'Europe/Moscow',
+                'PST': 'US/Pacific',
+                'TURKEY': 'Europe/Istanbul'
+                }
 
-# print(convert_to_tz())
-
-convert_from_tz()
-
-# # CHECK
-# for key in tz_olson:
-#     try:
-#         dt = datetime.datetime.now(tz=pytz.timezone(tz_olson[key]))
-#         print(dt.tzinfo) # turned into a string, it can be split/parsed
-#         print(dt.strftime("%Z"))
-#     except AttributeError:
-#         continue
-#
-
-
-
+    
